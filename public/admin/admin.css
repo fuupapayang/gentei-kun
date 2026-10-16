@@ -137,5 +137,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid #9db8ee;border-color:v
 @media (max-width:760px){.topbar-logo{display:none}.thumb{width:56px;height:38px}}
 
 .brand{display:flex;align-items:center;gap:10px}
-.brand-logo{height:1.3em;width:auto;border-radius:3px;display:block;flex:none}
-.login h1 .brand-logo.lg{display:inline-block;vertical-align:middle;margin-right:10px;height:1.3em}
+/* IKIIKI logo: SVG used as a mask so it takes the surrounding text colour (blends into any background) */
+.brand-logo{display:block;flex:none;height:1.05em;width:calc(1.05em * 761 / 196);background-color:currentColor;-webkit-mask:url(ikiiki-logo.svg) center/contain no-repeat;mask:url(ikiiki-logo.svg) center/contain no-repeat}
+.login h1 .brand-logo.lg{display:inline-block;vertical-align:-.1em;margin-right:10px}
+.login h1{font-size:19px;white-space:nowrap}
