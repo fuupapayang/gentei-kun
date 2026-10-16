@@ -137,5 +137,5 @@ input:focus,select:focus,textarea:focus{outline:2px solid #9db8ee;border-color:v
 @media (max-width:760px){.topbar-logo{display:none}.thumb{width:56px;height:38px}}
 
 .brand{display:flex;align-items:center;gap:10px}
-.brand-logo{height:36px;width:36px;border-radius:8px;display:block;flex:none}
-.login h1 .brand-logo.lg{height:44px;width:44px;border-radius:10px;display:inline-block;vertical-align:middle;margin-right:10px}
+.brand-logo{height:1.3em;width:auto;border-radius:3px;display:block;flex:none}
+.login h1 .brand-logo.lg{display:inline-block;vertical-align:middle;margin-right:10px;height:1.3em}
