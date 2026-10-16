@@ -1,0 +1,50 @@
+name: Send queued push notifications
+
+# Free "server": polls Firestore every 5 minutes and sends pushes whose status is 'queued'.
+# NOTE: GitHub's cron is best-effort and may be delayed by several minutes (or skipped under load).
+# Use "Run workflow" for an immediate send.
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: send-push
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check required secrets / variables
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          SITE_URL: ${{ vars.SITE_URL }}
+        run: |
+          missing=0
+          for n in FIREBASE_SERVICE_ACCOUNT VAPID_PRIVATE_KEY SITE_URL; do
+            if [ -z "${!n}" ]; then echo "::error::$n is not set (Settings > Secrets and variables > Actions)"; missing=1; fi
+          done
+          exit $missing
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: scripts/package-lock.json
+      - name: Install
+        working-directory: scripts
+        run: npm ci --no-audit --no-fund
+      - name: Send queued pushes
+        working-directory: scripts
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ vars.VAPID_SUBJECT }}
+          SITE_URL: ${{ vars.SITE_URL }}
+        run: node send-pushes.js

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>接客ツール｜限定くん</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#000000">
+<link rel="stylesheet" href="tool.css">
+</head>
+<body>
+<div id="app">
+  <div id="hero" aria-label="物件ビジュアル"></div>
+  <header id="brand">
+    <div class="brand-sub">RESIDENCE &amp; GALLERY</div>
+    <h1 id="propName" aria-label="グランレ・ジェイド葉山"><img class="prop-logo" src="../assets/img/common_logo.svg" alt="Grand Le JADE HAYAMA" onerror="this.replaceWith(document.createTextNode('グランレ・ジェイド葉山'))"></h1>
+    <div class="brand-tag" id="propTag"></div>
+  </header>
+  <img id="clientLogo" class="client-logo" src="../assets/img/common_escon.svg" alt="ES CON エスコン" onerror="this.style.display='none'">
+  <button id="menuBtn" class="pill" type="button"><svg viewBox="0 0 24 24"><use href="#i-grid"/></svg>すべての機能</button>
+  <div id="timeSwitch" class="pill-group" role="group" aria-label="時間帯">
+    <button data-t="day" type="button">昼</button><button data-t="dusk" class="on" type="button">夕</button><button data-t="night" type="button">夜</button>
+  </div>
+  <nav id="dock" aria-label="メニュー"></nav>
+</div>
+<div id="toast" role="status"></div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs id="icons"></defs></svg>
+<script src="../config.js"></script>
+<script src="art.js"></script>
+<script src="tool.js"></script>
+<script src="mod-books.js"></script>
+<script src="mod-viewers.js"></script>
+<script src="mod-media.js"></script>
+<script src="mod-plans.js"></script>
+<script src="mod-misc.js"></script>
+<script src="boot.js"></script>
+</body>
+</html>

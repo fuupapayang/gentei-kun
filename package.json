@@ -1,0 +1,8 @@
+{
+  "name": "gentei-kun-aplika",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": { "start": "node server.js" },
+  "dependencies": { "express": "^4.21.2", "web-push": "^3.6.7" }
+}

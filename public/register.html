@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b3d91">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="限定くん">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="app.css">
+<title>会員登録｜限定くん</title>
+</head>
+<body data-page="register">
+<div class="page">
+  <div class="page-head">
+    <a class="logo" href="./"><img class="escon-logo inv" src="assets/img/common_escon.svg" alt="ES CON エスコン"><small>限定くん｜<span class="pname">グランレ・ジェイド葉山</span></small></a>
+    <h1>会員登録</h1>
+    <p>ご登録者様だけの限定情報をお届けします</p>
+  </div>
+  <div class="wrap">
+    <div class="steps-bar" id="stepsBar">
+      <div class="s on"><b>1</b>入力</div>
+      <div class="s"><b>2</b>確認</div>
+      <div class="s"><b>3</b>完了</div>
+    </div>
+
+    <div class="card" id="s1">
+      <div class="alert" id="errBox"></div>
+      <form id="form" novalidate>
+        <div class="field" id="f-name">
+          <label for="name">お名前<em>必須</em></label>
+          <input type="text" id="name" name="name" autocomplete="name" placeholder="例）山田 太郎" maxlength="60">
+          <div class="err">お名前をご入力ください。</div>
+        </div>
+        <div class="field" id="f-email">
+          <label for="email">メールアドレス<em>必須</em></label>
+          <input type="email" id="email" name="email" autocomplete="email" inputmode="email" placeholder="例）taro@example.com" maxlength="120">
+          <div class="err">正しいメールアドレスをご入力ください。</div>
+        </div>
+        <p class="note">ご入力いただいた情報は、物件に関するご案内の目的のみに使用いたします。</p>
+        <button class="btn btn-red btn-block" type="submit">確認画面へ</button>
+      </form>
+    </div>
+
+    <div class="card" id="s2" hidden>
+      <h2 class="serif" style="margin:0 0 6px;font-size:18px;letter-spacing:.08em">入力内容のご確認</h2>
+      <p class="note" style="margin:0 0 10px">内容をご確認のうえ、「登録する」を押してください。</p>
+      <dl class="confirm-list">
+        <div><dt>お名前</dt><dd id="c-name"></dd></div>
+        <div><dt>メール</dt><dd id="c-email"></dd></div>
+      </dl>
+      <div class="alert" id="errBox2"></div>
+      <div class="btn-row">
+        <button class="btn btn-red btn-block" id="submit">登録する</button>
+        <button class="btn btn-line btn-block" id="back">修正する</button>
+      </div>
+    </div>
+
+    <div class="card center" id="s3" hidden>
+      <div class="done-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+      <h2 class="serif" style="margin:0 0 6px;font-size:20px;letter-spacing:.1em"><span id="d-name"></span>様<br>ご登録ありがとうございます</h2>
+      <p class="note">続いて、限定情報をアプリで受け取るための<br><b style="color:var(--red)">ホーム画面への追加（約30秒）</b>へ進みます。</p>
+      <p style="margin:18px 0 0"><span class="count" id="cd">3</span> 秒後に自動で移動します</p>
+      <div class="bar"><i id="bar"></i></div>
+      <a class="btn btn-blue btn-block" href="install.html" style="margin-top:16px">今すぐ追加手順へ進む</a>
+    </div>
+  </div>
+  <div class="foot-light"><img class="escon-logo" src="assets/img/common_escon.svg" alt="ES CON エスコン"><div class="prov">提供 株式会社エスコン</div></div>
+</div>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

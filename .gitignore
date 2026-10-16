@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.DS_Store
+# local runtime data (contains VAPID private key + demo data) - never publish
+data/
+functions/node_modules/
+functions/.env*
+functions/.secret.local
+*.log
