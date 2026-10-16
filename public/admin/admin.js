@@ -75,7 +75,7 @@ const confirmBox = (msg) => new Promise(res => {
 function renderLogin() {
   $app.innerHTML = `<div class="login-wrap"><form class="login" id="lf">
     <img class="login-logo" src="${gUrl('/assets/img/common_escon.svg')}" alt="ES CON エスコン" onerror="this.style.display='none'">
-    <h1>限定くん マネージャー</h1><p>限定くん 管理コンソール</p>
+    <h1><img class="brand-logo lg" src="ikiiki-logo.png" alt="IKIIKI">限定くん マネージャー</h1><p>限定くん 管理コンソール</p>
  ${FB ? '<label class="f">メールアドレス<input type="email" id="em" autofocus autocomplete="username"></label>' : ''}
     <label class="f">パスワード<input type="password" id="pw" ${FB ? '' : 'autofocus'} autocomplete="current-password"></label>
     <button class="btn blue" style="width:100%;justify-content:center;padding:11px">ログイン</button>
@@ -111,7 +111,7 @@ function renderShell() {
   $app.innerHTML = `
   <div class="topbar">
     <button class="menu-toggle" id="mt">☰</button>
-    <div class="brand">限定くん<span>マネージャー</span></div>
+    <div class="brand"><img class="brand-logo" src="ikiiki-logo.png" alt="IKIIKI">限定くん<span>マネージャー</span></div>
     <img class="topbar-logo" src="${gUrl('/assets/img/common_escon.svg')}" alt="ES CON" onerror="this.style.display='none'">
     <div class="prop" title="${esc(propTitle())}">🏢 ${esc(propTitle())}</div>
     <button class="logout" id="lo">ログアウト</button>
