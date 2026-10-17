@@ -104,6 +104,25 @@
       updateBadge();
     }).catch(function (e) { if (e.status === 401) { toast('ログイン情報が無効です。再度ご登録ください。'); } });
 
+    // first launch: ask for notifications right away (browsers require the user's own tap, so this is a one-tap sheet)
+    loadP.then(function () {
+      if (!('Notification' in window) || !('PushManager' in window) || !('serviceWorker' in navigator)) return;
+      if (Notification.permission === 'granted') { ensurePushSaved(); return; }
+      if (Notification.permission !== 'default') return;
+      var later = parseInt(lsGet('aplika.notifLater') || '0', 10);
+      if (later && Date.now() - later < 7 * 86400000) return;
+      var sh = document.createElement('div');
+      sh.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center';
+      sh.innerHTML = '<div style="background:#fff;color:#222;width:100%;max-width:520px;border-radius:18px 18px 0 0;padding:26px 22px calc(26px + env(safe-area-inset-bottom));text-align:center;font-family:inherit">'
+        + '<div style="font-size:19px;font-weight:700;margin-bottom:8px">新着の限定情報を受け取る</div>'
+        + '<p style="margin:0 0 18px;font-size:14px;line-height:1.7;color:#555">モデルルームのご案内や限定コンテンツの更新を、通知でお知らせします。次の画面で「許可」を選んでください。</p>'
+        + '<button type="button" id="npOn" style="display:block;width:100%;padding:15px;border:0;border-radius:999px;background:#c00000;color:#fff;font-size:16px;font-weight:700;margin-bottom:10px">通知をオンにする</button>'
+        + '<button type="button" id="npLater" style="display:block;width:100%;padding:12px;border:0;background:none;color:#888;font-size:14px">あとで</button></div>';
+      document.body.appendChild(sh);
+      sh.querySelector('#npOn').addEventListener('click', function () { sh.remove(); enablePush(); });
+      sh.querySelector('#npLater').addEventListener('click', function () { lsSet('aplika.notifLater', String(Date.now())); sh.remove(); });
+    });
+
     function seen() { try { return JSON.parse(lsGet('aplika.seen') || '[]'); } catch (e) { return []; } }
     function unreadList() { var s = seen(); return S.pushes.filter(function (p) { return s.indexOf(p.id) < 0; }); }
     function updateBadge() {
