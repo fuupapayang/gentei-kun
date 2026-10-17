@@ -218,21 +218,37 @@
     function refreshNotifState() {
       var st = $('#notifState'), btn = $('#notifBtn'); if (!st) return;
       if (!('Notification' in window) || !('PushManager' in window)) { st.textContent = 'お使いの環境ではプッシュ通知に対応していません（iPhoneはホーム画面から起動してください）。'; btn.disabled = true; return; }
-      if (Notification.permission === 'granted') { st.innerHTML = '<span class="notif-on">通知はオンです</span>'; btn.textContent = '通知を再登録'; }
+      if (Notification.permission === 'granted') { st.innerHTML = '<span class="notif-on">通知はオンです</span>'; btn.textContent = '通知を再登録'; ensurePushSaved(); }
       else if (Notification.permission === 'denied') { st.textContent = '通知がブロックされています。端末の設定からお許しください。'; }
     }
     function b64(v) { var p = '='.repeat((4 - v.length % 4) % 4); var r = atob((v + p).replace(/-/g, '+').replace(/_/g, '/')); var o = new Uint8Array(r.length); for (var i = 0; i < r.length; i++) o[i] = r.charCodeAt(i); return o; }
+    function withTimeout(pr, ms, msg) { return Promise.race([pr, new Promise(function (_, rej) { setTimeout(function () { rej(new Error(msg)); }, ms); })]); }
+    // subscribe (or reuse the subscription) and save it to the customer record; verifies the save
+    function savePushSub() {
+      return Promise.all([
+        withTimeout(navigator.serviceWorker.ready, 10000, 'Service Workerが起動していません。アプリを一度閉じて開き直してください'),
+        api('/vapid-public-key')
+      ]).then(function (r) {
+        var reg = r[0], key = r[1].key;
+        if (!key) throw new Error('通知用の鍵が取得できません');
+        return reg.pushManager.getSubscription().then(function (s) { return s || reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(key) }); });
+      }).then(function (sub) {
+        return api('/push/subscribe', { method: 'POST', body: { subscription: sub.toJSON ? sub.toJSON() : sub, platform: platform } });
+      });
+    }
+    var pushEnsured = false;
+    // permission already granted (e.g. earlier attempt) but the subscription may never have been saved: re-save silently once per launch
+    function ensurePushSaved() {
+      if (pushEnsured || !('serviceWorker' in navigator) || !('PushManager' in window) || Notification.permission !== 'granted') return;
+      pushEnsured = true;
+      savePushSub().catch(function (e) { console.warn('push resave failed', e); var st = $('#notifState'); if (st) st.textContent = '通知の登録に失敗しました: ' + (e && e.message || e); });
+    }
     function enablePush() {
       if (!('Notification' in window) || !('serviceWorker' in navigator)) return toast('通知に対応していない環境です');
       Notification.requestPermission().then(function (perm) {
         if (perm !== 'granted') { refreshNotifState(); return toast('通知は許可されませんでした'); }
-        return Promise.all([navigator.serviceWorker.ready, api('/vapid-public-key')]).then(function (r) {
-          var reg = r[0], key = r[1].key;
-          return reg.pushManager.getSubscription().then(function (s) { return s || reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(key) }); });
-        }).then(function (sub) {
-          return api('/push/subscribe', { method: 'POST', body: { subscription: sub.toJSON ? sub.toJSON() : sub, platform: platform } });
-        }).then(function () { toast('通知をオンにしました'); refreshNotifState(); });
-      }).catch(function (e) { toast('通知の設定に失敗しました'); console.warn(e); });
+        return savePushSub().then(function () { toast('通知をオンにしました'); refreshNotifState(); });
+      }).catch(function (e) { var m = '通知の設定に失敗しました: ' + (e && e.message || e); toast(m); var st = $('#notifState'); if (st) st.textContent = m; console.warn(e); });
     }
 
     /* ---- content viewers ---- */

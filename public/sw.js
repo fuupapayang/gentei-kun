@@ -1,6 +1,6 @@
 /* 限定くん Service Worker: app-shell offline cache + web push (base-path & cross-origin-API safe) */
 importScripts('config.js'); // sets self.GENTEI_CONFIG / gUrl / gApi (resolved relative to this file => site root)
-const VERSION = 'gentei-v3';
+const VERSION = 'gentei-v4';
 const BASE = new URL('./', self.location.href).pathname; // "/" locally, "/<repo>/" on GitHub Pages
 const P = p => BASE + p.replace(/^\//, '');
 const SHELL = ['/', '/index.html', '/register.html', '/install.html', '/app.css', '/app.js', '/config.js',
