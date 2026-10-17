@@ -9,7 +9,7 @@ function fakeStore(pushes, customers) {
     P, C,
     async listPushes() { return [...P.values()].map((x) => ({ ...x })); },
     async listCustomers() { return [...C.values()].map((x) => ({ ...x })); },
-    async claimPush(id, n) { const p = P.get(id); if (p.status === 'queued' || (p.status === 'sending' && n - (p.claimedAt || 0) > STALE_CLAIM_MS)) { p.status = 'sending'; p.claimedAt = n; return true; } return false; },
+    async claimPush(id, n) { const p = P.get(id); if (p.status === 'queued' || (p.status === 'scheduled' && Date.parse(p.scheduledAt) <= n) || (p.status === 'sending' && n - (p.claimedAt || 0) > STALE_CLAIM_MS)) { p.status = 'sending'; p.claimedAt = n; return true; } return false; },
     async clearSub(id) { C.get(id).pushSub = null; },
     async finishPush(id, f) { Object.assign(P.get(id), f); },
   };
@@ -85,6 +85,20 @@ function stub() {
   w = stub();
   r = await runSend({ store: st, webpush: w, siteUrl: 'https://x/', dryRun: true });
   assert.strictEqual(w.calls.length, 0); assert.strictEqual(st.P.get('p1').status, 'queued'); assert.strictEqual(r.skipped, 1);
+
+  // scheduled pushes: not sent before the time, sent once after it
+  const T = Date.parse('2026-10-20T06:00:00Z');
+  st = fakeStore([
+    { id: 's1', title: 'Later', body: 'B', url: '/', targetTags: [], status: 'scheduled', scheduledAt: '2026-10-20T06:30:00Z' },
+    { id: 's2', title: 'Due', body: 'B', url: '/', targetTags: [], status: 'scheduled', scheduledAt: '2026-10-20T05:55:00Z' },
+  ], customers());
+  w = stub();
+  r = await runSend({ store: st, webpush: w, siteUrl: 'https://x/', now: () => T });
+  assert.strictEqual(r.pushes, 1); assert.strictEqual(st.P.get('s1').status, 'scheduled'); assert.strictEqual(st.P.get('s2').status, 'sent');
+  r = await runSend({ store: st, webpush: stub(), siteUrl: 'https://x/', now: () => T + 31 * 60000 });
+  assert.strictEqual(r.pushes, 1); assert.strictEqual(st.P.get('s1').status, 'sent');
+  r = await runSend({ store: st, webpush: stub(), siteUrl: 'https://x/', now: () => T + 60 * 60000 });
+  assert.strictEqual(r.pushes, 0, 'never sent twice');
 
   console.log('test-send: all OK');
 })().catch((e) => { console.error(e); process.exit(1); });

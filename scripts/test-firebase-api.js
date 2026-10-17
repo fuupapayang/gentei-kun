@@ -271,6 +271,20 @@ const eq = (a, b, msg) => { assert.deepStrictEqual(a, b, msg); n++; };
     ok(threw, 'customer cannot read ' + c);
   }
 
+  // schedule: future time -> status scheduled; past/invalid rejected; PUT with '' clears it
+  eq((await call('POST', '/admin/login', { email: 'BOSS@example.com', password: 'pw-correct' })).status, 200);
+  const sp1 = await call('POST', '/admin/pushes', { title: '予約', body: 'b', url: '', targetTags: [] });
+  eq(sp1.status, 201);
+  const soon = new Date(Date.now() + 3600e3).toISOString();
+  const sch = await call('POST', `/admin/pushes/${sp1.j.id}/schedule`, { scheduledAt: soon });
+  eq(sch.status, 200); eq(sch.j.status, 'scheduled'); eq(sch.j.scheduledAt, soon);
+  eq((await call('POST', `/admin/pushes/${sp1.j.id}/schedule`, { scheduledAt: '2020-01-01T00:00:00Z' })).status, 400);
+  eq((await call('POST', `/admin/pushes/${sp1.j.id}/schedule`, { scheduledAt: 'x' })).status, 400);
+  eq((await call('POST', '/admin/pushes/nope/schedule', { scheduledAt: soon })).status, 404);
+  const clr = await call('PUT', `/admin/pushes/${sp1.j.id}`, { scheduledAt: '' });
+  eq(clr.j.status, 'draft');
+  eq((await call('GET', '/pushes')).j.some(x => x.id === sp1.j.id), false, 'customers never see unsent');
+
   // customer deletion cascades to events / files / conversions
   eq((await call('POST', '/admin/login', { email: 'BOSS@example.com', password: 'pw-correct' })).status, 200);
   const ff = await call('POST', `/admin/customers/${uid}/files`, { title: '削除確認', url: 'https://x/z.pdf', kind: 'file' });

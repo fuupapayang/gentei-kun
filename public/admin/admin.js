@@ -201,7 +201,7 @@ async function vPushes(v) {
   <div class="tblwrap"><table class="tbl"><thead><tr><th>タイトル</th><th>詳細通知</th><th>通知</th><th>対象</th><th>操作</th></tr></thead><tbody>
   ${list.map(p => `<tr><td><b>${esc(p.title)}</b><div class="note">${esc((p.body || '').slice(0, 50))}</div></td>
     <td>${p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener" title="${esc(p.url)}">🔗</a>` : '-'}</td>
-    <td>${p.status === 'sent' ? `<span class="badge yes">あり</span> <span class="note">${p.sentCount ?? 0}件</span>` : p.status === 'queued' ? '<span class="badge no">送信待ち</span>' : '<span class="badge no">なし</span>'}</td>
+    <td>${p.status === 'sent' ? `<span class="badge yes">あり</span> <span class="note">${p.sentCount ?? 0}件</span>` : p.status === 'queued' ? '<span class="badge no">送信待ち</span>' : p.status === 'scheduled' ? `<span class="badge blue">予約 ${esc(fmtSched(p.scheduledAt))}</span>` : '<span class="badge no">なし</span>'}</td>
     <td>${(p.targetTags || []).length ? tagHtml(p.targetTags) : '<span class="note">全員</span>'}</td>
     <td><button class="ibtn" data-e="${esc(p.id)}" title="編集">✏️</button><button class="ibtn" data-d="${esc(p.id)}" title="削除">🗑️</button></td></tr>`).join('') || '<tr><td colspan="5" class="empty">配信がありません</td></tr>'}
   </tbody></table></div>`;
@@ -250,6 +250,9 @@ async function waitSent(id, onTick) {
   return null;
 }
 
+const pad2 = n => String(n).padStart(2, '0');
+const fmtSched = iso => { const d = new Date(iso); return isNaN(d) ? '' : `${d.getMonth() + 1}/${d.getDate()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
+const toLocalInput = iso => { const d = new Date(iso); return iso && !isNaN(d) ? `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}` : ''; };
 function pushModal(p) {
   const sel = [...(p?.targetTags || [])];
   const sent = p?.status === 'sent';
@@ -258,18 +261,25 @@ function pushModal(p) {
     <label class="f">本文<textarea id="pb">${esc(p?.body)}</textarea></label>
     <label class="f">詳細通知URL <small>(タップ時に開くリンク)</small><input type="url" id="pu" placeholder="https://" value="${esc(p?.url)}"></label>
     <div class="f" style="font-weight:600;font-size:13px">対象タグ <small style="font-weight:400;color:var(--mut)">(未選択=全員)</small><div class="chips" id="pc"></div></div>
+    ${FB ? `<label class="f">送信予約日時 <small>(空欄=予約しない。指定した時刻以降の次回の定期実行で配信)</small><input type="datetime-local" id="ps" value="${esc(toLocalInput(p?.status === 'scheduled' ? p.scheduledAt : ''))}"></label>` : ''}
     <div class="pushprev"><img src="${gUrl('/assets/img/top_concept.jpg')}" alt=""><div><small>限定くん ・ いま</small><b id="ppt">${esc(p?.title) || 'タイトル'}</b><span id="ppb">${esc((p?.body || '').slice(0, 60)) || '本文がここに表示されます'}</span></div></div>
     ${sent ? `<p class="note">送信済み: ${p.sentCount ?? 0}件に配信</p>` : ''}<p id="pr" style="font-weight:700;color:var(--green)"></p>`,
-    footer: `<button class="btn" data-s>下書き保存</button><button class="btn red" data-n>今すぐ送信</button>`,
+    footer: `<button class="btn" data-s>下書き保存</button>${FB ? '<button class="btn blue" data-r>予約送信</button>' : ''}<button class="btn red" data-n>今すぐ送信</button>`,
     onMount: (el, close) => {
       chipPicker(el.querySelector('#pc'), sel);
       const upd = () => { el.querySelector('#ppt').textContent = el.querySelector('#pt').value || 'タイトル'; el.querySelector('#ppb').textContent = el.querySelector('#pb').value.slice(0, 60) || '本文がここに表示されます'; };
       el.querySelector('#pt').oninput = upd; el.querySelector('#pb').oninput = upd;
-      const val = () => ({ title: el.querySelector('#pt').value.trim(), body: el.querySelector('#pb').value, url: el.querySelector('#pu').value.trim(), targetTags: sel });
+      const val = () => ({ title: el.querySelector('#pt').value.trim(), body: el.querySelector('#pb').value, url: el.querySelector('#pu').value.trim(), targetTags: sel, ...(FB && p && !el.querySelector('#ps').value ? { scheduledAt: '' } : {}) });
       const save = async () => {
         const b = val(); if (!b.title) throw new Error('タイトルを入力してください');
         return p ? api('/pushes/' + p.id, { method: 'PUT', body: b }) : api('/pushes', { method: 'POST', body: b });
       };
+      if (el.querySelector('footer [data-r]')) el.querySelector('footer [data-r]').onclick = guard(async () => {
+        const v = el.querySelector('#ps').value; if (!v) throw new Error('送信予約日時を入力してください');
+        const when = new Date(v); if (isNaN(when) || when.getTime() < Date.now() + 60000) throw new Error('予約日時は、現在より後の時刻を指定してください');
+        const saved = await save(); const r = await api(`/pushes/${saved.id || p.id}/schedule`, { method: 'POST', body: { scheduledAt: when.toISOString() } });
+        toast(`予約しました(${fmtSched(r.scheduledAt)})`); close(); route();
+      });
       el.querySelector('footer [data-s]').onclick = guard(async () => { await save(); toast('下書きを保存しました'); close(); route(); });
       el.querySelector('footer [data-n]').onclick = guard(async () => {
         if (!await confirmBox('この内容で今すぐ送信しますか?')) return;

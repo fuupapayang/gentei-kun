@@ -357,6 +357,13 @@ function ruleSummary(customer, events, contents, conversions = [], now = Date.no
         await setOne(r, 'pushes', np.id, np); return [201, np];
       }
     }
+    if ((mm = p.match(/^\/pushes\/([^/]+)\/schedule$/)) && m === 'POST') {
+      var sc = await getOne(r, 'pushes', mm[1]); if (!sc) fail(404, 'not found');
+      var when = Date.parse(body.scheduledAt); if (isNaN(when)) fail(400, 'scheduledAt is required');
+      if (when < Date.now() - 60000) fail(400, 'scheduledAt must be in the future');
+      var su = { status: 'scheduled', scheduledAt: new Date(when).toISOString() };
+      await patch(r, 'pushes', sc.id, su); return Object.assign(sc, su);
+    }
     if ((mm = p.match(/^\/pushes\/([^/]+)\/send$/)) && m === 'POST') {
       var sp = await getOne(r, 'pushes', mm[1]); if (!sp) fail(404, 'not found');
       var q = { status: 'queued', queuedAt: nowISO() };
@@ -372,6 +379,7 @@ function ruleSummary(customer, events, contents, conversions = [], now = Date.no
         if (body.body !== undefined) u.body = str(body.body, 500);
         if (body.url !== undefined) u.url = str(body.url, 500) || '/';
         if (body.targetTags !== undefined) { var a = strArr(body.targetTags); if (!a) fail(400, 'targetTags must be array'); u.targetTags = a; }
+        if (body.scheduledAt === '' || body.scheduledAt === null) { if (pp.status === 'scheduled') u.status = 'draft'; u.scheduledAt = ''; }
         if (Object.keys(u).length) await patch(r, 'pushes', pp.id, u);
         return Object.assign(pp, u);
       }

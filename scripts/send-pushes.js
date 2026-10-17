@@ -22,7 +22,8 @@ async function runSend({ store, webpush, siteUrl, dryRun = false, now = () => Da
   const result = { pushes: 0, sent: 0, failed: 0, skipped: 0 };
   const all = await store.listPushes();
   const t0 = now();
-  const candidates = all.filter((p) => p.status === 'queued' ||
+  const due = (p) => p.status === 'scheduled' && Date.parse(p.scheduledAt) <= t0; // reserved send time has arrived
+  const candidates = all.filter((p) => p.status === 'queued' || due(p) ||
     (p.status === 'sending' && t0 - (p.claimedAt || 0) > STALE_CLAIM_MS));
   if (!candidates.length) { log('queued pushes: 0'); return result; }
   const customers = await store.listCustomers();
@@ -63,7 +64,7 @@ function firestoreStore(db) {
       return db.runTransaction(async (t) => {
         const d = await t.get(ref); const v = d.exists ? d.data() : null;
         if (!v) return false;
-        const ok = v.status === 'queued' || (v.status === 'sending' && nowMs - (v.claimedAt || 0) > STALE_CLAIM_MS);
+        const ok = v.status === 'queued' || (v.status === 'scheduled' && Date.parse(v.scheduledAt) <= nowMs) || (v.status === 'sending' && nowMs - (v.claimedAt || 0) > STALE_CLAIM_MS);
         if (!ok) return false;
         t.update(ref, { status: 'sending', claimedAt: nowMs });
         return true;
