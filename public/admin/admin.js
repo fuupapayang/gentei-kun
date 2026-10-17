@@ -197,7 +197,7 @@ function barSvg(labels, vals, color) {
 async function vPushes(v) {
   const list = await api('/pushes');
   list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-  v.innerHTML = `<h2 class="title">セルフ配信一覧 <span class="sp"></span>${(self.GENTEI_CONFIG || {}).github && list.some(p => p.status === 'queued') ? '<button class="btn red" id="runq">⚡ 送信待ちを今すぐ配信</button> ' : ''}<button class="btn green" id="new">＋ 新規作成</button></h2>
+  v.innerHTML = `<h2 class="title">セルフ配信一覧 <span class="sp"></span>${FB && list.some(p => p.status === 'queued') ? '<button class="btn red" id="runq">⚡ 送信待ちを今すぐ配信</button> ' : ''}<button class="btn green" id="new">＋ 新規作成</button></h2>
   <div class="tblwrap"><table class="tbl"><thead><tr><th>タイトル</th><th>詳細通知</th><th>通知</th><th>対象</th><th>操作</th></tr></thead><tbody>
   ${list.map(p => `<tr><td><b>${esc(p.title)}</b><div class="note">${esc((p.body || '').slice(0, 50))}</div></td>
     <td>${p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener" title="${esc(p.url)}">🔗</a>` : '-'}</td>
@@ -224,7 +224,9 @@ const askToken = (repo) => new Promise(res => {
     onMount: (el, close) => { el.querySelector('[data-n]').onclick = () => fin('', close); el.querySelector('[data-y]').onclick = () => fin(el.querySelector('#ght').value.trim(), close); el.querySelector('#ght').focus(); } });
 });
 async function dispatchSender() {
-  const g = (self.GENTEI_CONFIG || {}).github;
+  // config.js may be stale in the browser cache: fall back to <owner>.github.io/<repo>/ from the URL
+  const m = location.hostname.match(/^([^.]+)\.github\.io$/), seg = location.pathname.split('/')[1];
+  const g = (self.GENTEI_CONFIG || {}).github || (m && seg ? { repo: m[1] + '/' + seg, workflow: 'send-push.yml', ref: 'main' } : null);
   if (!g || !g.repo) throw new Error('GitHub連携の設定がありません');
   let tk = ''; try { tk = localStorage.getItem(GH_TOKEN_KEY) || ''; } catch (e) {}
   if (!tk) {
