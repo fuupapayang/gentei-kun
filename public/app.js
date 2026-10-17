@@ -107,10 +107,11 @@
     // first launch: ask for notifications right away (browsers require the user's own tap, so this is a one-tap sheet)
     loadP.then(function () {
       if (!('Notification' in window) || !('PushManager' in window) || !('serviceWorker' in navigator)) return;
-      if (Notification.permission === 'granted') { ensurePushSaved(); return; }
-      if (Notification.permission !== 'default') return;
+      var force = qs.get('np') === '1'; // ?np=1 shows the sheet again (for checking the screen)
+      if (Notification.permission === 'granted') { ensurePushSaved(); if (!force) return; }
+      else if (Notification.permission !== 'default' && !force) return;
       var later = parseInt(lsGet('aplika.notifLater') || '0', 10);
-      if (later && Date.now() - later < 7 * 86400000) return;
+      if (!force && later && Date.now() - later < 7 * 86400000) return;
       var sh = document.createElement('div');
       sh.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center';
       sh.innerHTML = '<div style="background:#fff;color:#222;width:100%;max-width:520px;border-radius:18px 18px 0 0;padding:26px 22px calc(26px + env(safe-area-inset-bottom));text-align:center;font-family:inherit">'
