@@ -38,7 +38,7 @@ async function runSend({ store, webpush, siteUrl, dryRun = false, now = () => Da
     let sent = 0, failed = 0;
     for (const c of subs) {
       try {
-        await webpush.sendNotification(c.pushSub, payload);
+        await webpush.sendNotification(c.pushSub, payload, { TTL: 86400, urgency: 'high' }); // high: wake sleeping Android (Doze) promptly
         sent++;
       } catch (e) {
         failed++;
