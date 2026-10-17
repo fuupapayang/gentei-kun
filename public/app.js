@@ -160,7 +160,7 @@
       var un = unreadList();
       var h = '<div class="limit-card"><span class="tag">お客様限定情報</span><h3>' + esc(latest ? latest.title : 'ご登録ありがとうございます') + '</h3><p>' +
         esc(latest ? latest.body : 'ご登録者様だけの限定情報をお届けします。通知を許可いただくと、新着情報をいち早くお知らせします。') + '</p>' +
-        '<button class="btn btn-red btn-sm" id="notifBtn">通知を許可</button><div class="notif-state" id="notifState"></div></div>';
+        '<button class="btn btn-red btn-sm" id="notifBtn">通知を許可</button> <button class="btn btn-sm" id="notifTest" type="button" style="margin-left:6px">テスト通知を表示</button><div class="notif-state" id="notifState"></div></div>';
 
       h += '<div class="sec-title">CONTENTS</div><div class="grid">';
       if (S.personal.length) {
@@ -185,6 +185,15 @@
       $('#mBody').innerHTML = h;
       refreshNotifState();
       $('#notifBtn').addEventListener('click', enablePush);
+      $('#notifTest').addEventListener('click', function () {
+        var st = $('#notifState');
+        if (!('serviceWorker' in navigator) || !('Notification' in window)) return toast('通知に対応していない環境です');
+        if (Notification.permission !== 'granted') { st.textContent = '通知が許可されていません(状態: ' + Notification.permission + ')'; return; }
+        navigator.serviceWorker.ready.then(function (reg) {
+          return reg.showNotification('限定くん テスト通知', { body: 'この端末の通知表示は正常です', icon: gUrl('/icons/icon-192.png'), tag: 'gentei-test-' + Date.now() });
+        }).then(function () { st.textContent = 'テスト通知を送りました。表示されない場合は、端末の通知設定(集中モードなど)を確認してください。'; })
+          .catch(function (e) { st.textContent = 'テスト通知に失敗: ' + (e && e.message || e); });
+      });
       $$('[data-c]', modal).forEach(function (b) { b.addEventListener('click', function () { openContent(S.contents[+b.dataset.c]); }); });
       var pb = $('[data-personal]', modal); if (pb) pb.addEventListener('click', renderPersonal);
       $$('[data-push]', modal).forEach(function (b) {
