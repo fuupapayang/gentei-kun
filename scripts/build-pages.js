@@ -72,7 +72,7 @@ const walk = (dir, out = []) => {
 
 // ---- config.js: prepend the real config (config.js keeps an existing GENTEI_CONFIG) ----
 const cfgPath = path.join(OUT, 'config.js');
-fs.writeFileSync(cfgPath, 'self.GENTEI_CONFIG=' + JSON.stringify(mode === 'firebase' ? { apiBase: 'firebase', firebase: fbConfig, adminEmails } : { apiBase: api }) + ';\n' + fs.readFileSync(cfgPath, 'utf8'));
+fs.writeFileSync(cfgPath, 'self.GENTEI_CONFIG=' + JSON.stringify(mode === 'firebase' ? { apiBase: 'firebase', firebase: fbConfig, adminEmails, github: process.env.GITHUB_REPOSITORY ? { repo: process.env.GITHUB_REPOSITORY, workflow: 'send-push.yml', ref: 'main' } : undefined } : { apiBase: api }) + ';\n' + fs.readFileSync(cfgPath, 'utf8'));
 
 // ---- html: noindex meta, absolute og:image ----
 const robotsMeta = '<meta name="robots" content="noindex, nofollow, noarchive">';

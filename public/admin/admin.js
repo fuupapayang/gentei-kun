@@ -197,7 +197,7 @@ function barSvg(labels, vals, color) {
 async function vPushes(v) {
   const list = await api('/pushes');
   list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-  v.innerHTML = `<h2 class="title">セルフ配信一覧 <span class="sp"></span><button class="btn green" id="new">＋ 新規作成</button></h2>
+  v.innerHTML = `<h2 class="title">セルフ配信一覧 <span class="sp"></span>${(self.GENTEI_CONFIG || {}).github && list.some(p => p.status === 'queued') ? '<button class="btn red" id="runq">⚡ 送信待ちを今すぐ配信</button> ' : ''}<button class="btn green" id="new">＋ 新規作成</button></h2>
   <div class="tblwrap"><table class="tbl"><thead><tr><th>タイトル</th><th>詳細通知</th><th>通知</th><th>対象</th><th>操作</th></tr></thead><tbody>
   ${list.map(p => `<tr><td><b>${esc(p.title)}</b><div class="note">${esc((p.body || '').slice(0, 50))}</div></td>
     <td>${p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener" title="${esc(p.url)}">🔗</a>` : '-'}</td>
@@ -206,12 +206,41 @@ async function vPushes(v) {
     <td><button class="ibtn" data-e="${esc(p.id)}" title="編集">✏️</button><button class="ibtn" data-d="${esc(p.id)}" title="削除">🗑️</button></td></tr>`).join('') || '<tr><td colspan="5" class="empty">配信がありません</td></tr>'}
   </tbody></table></div>`;
   v.querySelector('#new').onclick = () => pushModal(null);
+  const rq = v.querySelector('#runq');
+  if (rq) rq.onclick = guard(async () => { await dispatchSender(); toast('配信を開始しました(約30秒)'); setTimeout(route, 30000); });
   v.onclick = guard(async e => {
     const eb = e.target.closest('[data-e]'), db = e.target.closest('[data-d]');
     if (eb) pushModal(list.find(p => p.id === eb.dataset.e));
     if (db && await confirmBox('この配信を削除しますか?')) { await api('/pushes/' + db.dataset.d, { method: 'DELETE' }); toast('削除しました'); route(); }
   });
 }
+/* ---------- instant push (free plan): queue in Firestore + start the GitHub Actions sender right away ---------- */
+const GH_TOKEN_KEY = 'gentei.ghToken';
+async function dispatchSender() {
+  const g = (self.GENTEI_CONFIG || {}).github;
+  if (!g || !g.repo) throw new Error('GitHub連携の設定がありません');
+  let tk = ''; try { tk = localStorage.getItem(GH_TOKEN_KEY) || ''; } catch (e) {}
+  if (!tk) {
+    tk = (prompt('今すぐ送信には、GitHubのアクセストークンが必要です(この端末のブラウザにだけ保存されます)。\n\n作り方: GitHub > Settings > Developer settings > Fine-grained tokens\n・Repository: ' + g.repo + ' だけ\n・Permissions: Actions = Read and write\n\nトークンを貼り付けてください:') || '').trim();
+    if (!tk) throw new Error('トークンが未入力のため、5分ごとの自動送信を待ちます');
+  }
+  const r = await fetch(`https://api.github.com/repos/${g.repo}/actions/workflows/${g.workflow || 'send-push.yml'}/dispatches`, {
+    method: 'POST', headers: { Authorization: 'Bearer ' + tk, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
+    body: JSON.stringify({ ref: g.ref || 'main' }) });
+  if (r.status === 401 || r.status === 403 || r.status === 404) { try { localStorage.removeItem(GH_TOKEN_KEY); } catch (e) {} throw new Error('GitHubトークンが無効です(権限: Actions=Read and write)。もう一度お試しください'); }
+  if (!r.ok) throw new Error('GitHubの起動に失敗しました(' + r.status + ')');
+  try { localStorage.setItem(GH_TOKEN_KEY, tk); } catch (e) {}
+}
+async function waitSent(id, onTick) {
+  for (let i = 0; i < 24; i++) {
+    await new Promise(res => setTimeout(res, 5000));
+    const l = await api('/pushes'); const q = l.find(x => x.id === id);
+    if (q && q.status === 'sent') return q;
+    onTick && onTick(i);
+  }
+  return null;
+}
+
 function pushModal(p) {
   const sel = [...(p?.targetTags || [])];
   const sent = p?.status === 'sent';
@@ -236,9 +265,17 @@ function pushModal(p) {
       el.querySelector('[data-n]').onclick = guard(async () => {
         if (!await confirmBox('この内容で今すぐ送信しますか?')) return;
         const saved = await save(); const r = await api(`/pushes/${saved.id || p.id}/send`, { method: 'POST' });
-        el.querySelector('#pr').textContent = r.queued ? '送信を予約しました(最大5分以内に配信されます)' : `送信完了: ${r.sentCount ?? 0}件に配信しました`;
-        toast(r.queued ? '送信を予約しました' : `送信完了(${r.sentCount ?? 0}件)`);
-        setTimeout(() => { close(); route(); }, 1600);
+        const pr = el.querySelector('#pr');
+        if (!r.queued) { pr.textContent = `送信完了: ${r.sentCount ?? 0}件に配信しました`; toast(`送信完了(${r.sentCount ?? 0}件)`); setTimeout(() => { close(); route(); }, 1600); return; }
+        const id = saved.id || p.id;
+        try {
+          pr.textContent = '送信を開始しています…'; await dispatchSender();
+          pr.textContent = '配信中です(約30秒)…';
+          const done = await waitSent(id, i => { pr.textContent = '配信中です…(' + (i + 1) * 5 + '秒)'; });
+          pr.textContent = done ? `送信完了: ${done.sentCount ?? 0}件に配信しました` : '送信を開始しました。完了まで少しかかります(一覧で確認してください)';
+          toast(done ? `送信完了(${done.sentCount ?? 0}件)` : '送信を開始しました');
+        } catch (e) { pr.style.color = 'var(--red)'; pr.textContent = '送信を予約しました(' + (e.message || e) + ')'; toast('予約しました(最大5分以内に配信)', true); await new Promise(res => setTimeout(res, 2600)); }
+        close(); route();
       });
     } });
 }
