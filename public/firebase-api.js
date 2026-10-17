@@ -398,6 +398,14 @@ function ruleSummary(customer, events, contents, conversions = [], now = Date.no
           if (Object.keys(cu).length) await patch(r, 'customers', cid, cu);
           return pubCustomer(Object.assign(c, cu));
         }
+        if (m === 'DELETE') { /* erase the customer and everything that belongs to them */
+          var rel = await Promise.all([allDocs(r, 'events', [W('customerId', '==', cid)]), allDocs(r, 'personalFiles', [W('customerId', '==', cid)]), allDocs(r, 'conversions', [W('customerId', '==', cid)])]);
+          var dops = [];
+          [['events', rel[0]], ['personalFiles', rel[1]], ['conversions', rel[2]]].forEach(function (g) { g[1].forEach(function (d) { dops.push(function (b) { b.delete(S.fs.doc(r.db, g[0], d.id)); }); }); });
+          dops.push(function (b) { b.delete(S.fs.doc(r.db, 'customers', cid)); });
+          await commitChunks(r, dops);
+          return { ok: true, removed: { events: rel[0].length, files: rel[1].length, conversions: rel[2].length } };
+        }
       }
       if (sub === 'files') {
         if (m === 'GET' && !fid) return allDocs(r, 'personalFiles', [W('customerId', '==', cid)]);

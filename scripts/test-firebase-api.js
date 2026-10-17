@@ -271,5 +271,15 @@ const eq = (a, b, msg) => { assert.deepStrictEqual(a, b, msg); n++; };
     ok(threw, 'customer cannot read ' + c);
   }
 
+  // customer deletion cascades to events / files / conversions
+  eq((await call('POST', '/admin/login', { email: 'BOSS@example.com', password: 'pw-correct' })).status, 200);
+  const ff = await call('POST', `/admin/customers/${uid}/files`, { title: '削除確認', url: 'https://x/z.pdf', kind: 'file' });
+  eq(ff.status, 201);
+  const evBefore = (await call('GET', `/admin/customers/${uid}/events`)).j.length;
+  const del = await call('DELETE', `/admin/customers/${uid}`);
+  eq(del.j.ok, true); ok(del.j.removed.events === evBefore && del.j.removed.files >= 1, 'cascade counts');
+  eq((await call('GET', `/admin/customers/${uid}`)).status, 404);
+  eq((await call('DELETE', `/admin/customers/${uid}`)).status, 404);
+
   console.log(`OK  firebase-api shim: ${n} assertions passed`);
 })().catch((e) => { console.error('FAIL', e); process.exit(1); });

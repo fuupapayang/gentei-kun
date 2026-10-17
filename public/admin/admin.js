@@ -301,11 +301,17 @@ async function vCustomers(v) {
       <td><span class="badge ${r.recent ? 'red' : 'gray'}">${r.text}</span></td>
       <td>${esc(c.assignee) || '<span class="note">未設定</span>'}</td>
       <td>${c.status ? `<span class="badge blue">${esc(c.status)}</span> ` : ''}${tagHtml(c.tags)}</td>
-      <td><a class="btn sm blue" href="#/customers/${esc(c.id)}">詳しく見る</a></td></tr>`; }).join('') || '<tr><td colspan="5" class="empty">該当する顧客がいません</td></tr>';
+      <td><a class="btn sm blue" href="#/customers/${esc(c.id)}">詳しく見る</a> <button class="ibtn" data-cd="${esc(c.id)}" title="削除">🗑️</button></td></tr>`; }).join('') || '<tr><td colspan="5" class="empty">該当する顧客がいません</td></tr>';
   };
   v.innerHTML = `<h2 class="title">顧客管理 <span class="sp"></span><input type="text" id="q" placeholder="名前・メール・担当者で検索" style="width:260px;margin:0"></h2>
   <div class="tblwrap"><table class="tbl"><thead><tr><th>お客様</th><th>最終アクセス</th><th>担当者</th><th>ステータス / タグ</th><th></th></tr></thead><tbody></tbody></table></div>`;
   v.querySelector('#q').oninput = e => { q = e.target.value.toLowerCase(); draw(); };
+  v.querySelector('tbody').onclick = guard(async e => {
+    const b = e.target.closest('[data-cd]'); if (!b) return;
+    const c = list.find(x => x.id === b.dataset.cd); if (!c) return;
+    if (!await confirmBox(`「${c.name}」様を削除しますか?\n専用資料・閲覧履歴・コンバージョンも一緒に削除され、元に戻せません。`)) return;
+    await api('/customers/' + c.id, { method: 'DELETE' }); toast('顧客を削除しました'); route();
+  });
   draw();
 }
 
@@ -326,7 +332,7 @@ async function vCustomerDetail(v, id) {
      <dt>担当者</dt><dd><input type="text" id="ca" value="${esc(c.assignee)}" placeholder="例: 山田" style="margin:0"></dd>
      <dt>タグ</dt><dd><div class="chips" id="cc" style="margin:0"></div></dd>
      <dt>メモ</dt><dd><textarea id="cm" style="margin:0;min-height:60px">${esc(c.memo)}</textarea></dd></dl>
-     <div style="margin-top:12px;text-align:right"><button class="btn blue" id="csave">保存</button></div></div>
+     <div style="margin-top:12px;display:flex;justify-content:space-between;align-items:center"><button class="btn" id="cdel" style="color:var(--red);border-color:var(--red)">🗑️ この顧客を削除</button><button class="btn blue" id="csave">保存</button></div></div>
    <div class="card"><h3>行動タイムライン <span class="note">(${evs.length}件)</span></h3>
      <ul class="timeline" style="max-height:340px;overflow:auto">${evs.slice(0, 60).map(e => `<li><b>${esc(EVT[e.type] || e.type)}</b>${e.target ? ` <span class="note">${esc(e.target)}</span>` : ''}<time>${fmt(e.at)}</time></li>`).join('') || '<li class="note">まだ行動がありません</li>'}</ul></div>
   </div>
@@ -341,6 +347,10 @@ async function vCustomerDetail(v, id) {
   v.querySelector('#csave').onclick = guard(async () => {
     await api('/customers/' + id, { method: 'PUT', body: { tags: sel, status: v.querySelector('#cs').value.trim(), assignee: v.querySelector('#ca').value.trim(), memo: v.querySelector('#cm').value } });
     toast('保存しました'); route();
+  });
+  v.querySelector('#cdel').onclick = guard(async () => {
+    if (!await confirmBox(`「${c.name}」様を削除しますか?\n専用資料・閲覧履歴・コンバージョンも一緒に削除され、元に戻せません。`)) return;
+    await api('/customers/' + id, { method: 'DELETE' }); toast('顧客を削除しました'); location.hash = '#/customers';
   });
   v.querySelector('#fadd').onclick = () => fileModal(id);
   v.querySelector('#flist').onclick = guard(async e => {

@@ -164,6 +164,15 @@ admin.put('/customers/:id', (req, res) => {
   if (req.body.memo !== undefined) c.memo = str(req.body.memo, 5000);
   save(); res.json(pubCustomer(c));
 });
+admin.delete('/customers/:id', (req, res) => {
+  const i = db.customers.findIndex((c) => c.id === req.params.id); if (i < 0) return bad(res, 'not found', 404);
+  const id = req.params.id;
+  db.customers.splice(i, 1);
+  db.events = db.events.filter((e) => e.customerId !== id);
+  db.personalFiles = db.personalFiles.filter((f) => f.customerId !== id);
+  db.conversions = db.conversions.filter((x) => x.customerId !== id);
+  save(); res.json({ ok: true });
+});
 admin.get('/customers/:id/files', (req, res) => {
   if (!find(db.customers, req.params.id)) return bad(res, 'not found', 404);
   res.json(db.personalFiles.filter((f) => f.customerId === req.params.id));
