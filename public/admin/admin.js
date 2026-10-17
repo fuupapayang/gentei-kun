@@ -223,7 +223,7 @@ const askToken = (repo) => new Promise(res => {
     footer: '<button class="btn" data-n>キャンセル</button><button class="btn red" data-y>保存して送信</button>',
     onMount: (el, close) => { el.querySelector('[data-n]').onclick = () => fin('', close); el.querySelector('[data-y]').onclick = () => fin(el.querySelector('#ght').value.trim(), close); el.querySelector('#ght').focus(); } });
 });
-async function dispatchSender() {
+async function dispatchSender(workflow, inputs) {
   // config.js may be stale in the browser cache: fall back to <owner>.github.io/<repo>/ from the URL
   const m = location.hostname.match(/^([^.]+)\.github\.io$/), seg = location.pathname.split('/')[1];
   const g = (self.GENTEI_CONFIG || {}).github || (m && seg ? { repo: m[1] + '/' + seg, workflow: 'send-push.yml', ref: 'main' } : null);
@@ -233,9 +233,9 @@ async function dispatchSender() {
     tk = await askToken(g.repo);
     if (!tk) throw new Error('トークンが未入力のため、5分ごとの自動送信を待ちます');
   }
-  const r = await fetch(`https://api.github.com/repos/${g.repo}/actions/workflows/${g.workflow || 'send-push.yml'}/dispatches`, {
+  const r = await fetch(`https://api.github.com/repos/${g.repo}/actions/workflows/${workflow || g.workflow || 'send-push.yml'}/dispatches`, {
     method: 'POST', headers: { Authorization: 'Bearer ' + tk, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
-    body: JSON.stringify({ ref: g.ref || 'main' }) });
+    body: JSON.stringify(inputs ? { ref: g.ref || 'main', inputs } : { ref: g.ref || 'main' }) });
   if (r.status === 401 || r.status === 403 || r.status === 404) { try { localStorage.removeItem(GH_TOKEN_KEY); } catch (e) {} throw new Error('GitHubトークンが無効です(権限: Actions=Read and write)。もう一度お試しください'); }
   if (!r.ok) throw new Error('GitHubの起動に失敗しました(' + r.status + ')');
   try { localStorage.setItem(GH_TOKEN_KEY, tk); } catch (e) {}
@@ -278,7 +278,9 @@ function pushModal(p) {
         const v = el.querySelector('#ps').value; if (!v) throw new Error('送信予約日時を入力してください');
         const when = new Date(v); if (isNaN(when) || when.getTime() < Date.now() + 60000) throw new Error('予約日時は、現在より後の時刻を指定してください');
         const saved = await save(); const r = await api(`/pushes/${saved.id || p.id}/schedule`, { method: 'POST', body: { scheduledAt: when.toISOString() } });
-        toast(`予約しました(${fmtSched(r.scheduledAt)})`); close(); route();
+        // GitHub cron is unreliable on quiet repos: start a run that waits until the due time (needs the token, same as "今すぐ送信")
+        let precise = true; try { await dispatchSender('send-scheduled.yml', { run_at: r.scheduledAt }); } catch (e) { precise = false; toast('時刻ぴったりの配信を起動できませんでした(' + (e.message || e) + ')。定期実行での配信になり、遅れる場合があります', true); await new Promise(res => setTimeout(res, 2500)); }
+        toast(`予約しました(${fmtSched(r.scheduledAt)})${precise ? '' : ' ※遅れる場合あり'}`); close(); route();
       });
       el.querySelector('footer [data-s]').onclick = guard(async () => { await save(); toast('下書きを保存しました'); close(); route(); });
       el.querySelector('footer [data-n]').onclick = guard(async () => {

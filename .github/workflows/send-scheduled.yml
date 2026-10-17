@@ -1,0 +1,65 @@
+name: Send scheduled push (precise)
+
+# GitHub's cron is heavily throttled on quiet repos (runs every few hours), so a reserved send is
+# delivered by a dedicated run that is started when the reservation is made, sleeps until the due time,
+# then sends. A run can sleep at most ~5.5h; for later times it re-dispatches itself and exits.
+# Free on public repositories.
+on:
+  workflow_dispatch:
+    inputs:
+      run_at:
+        description: 'Due time (ISO 8601, e.g. 2026-10-20T06:00:00.000Z)'
+        required: true
+
+permissions:
+  contents: read
+  actions: write   # lets the run re-dispatch itself for far-away times
+
+concurrency:
+  group: scheduled-${{ inputs.run_at }}
+  cancel-in-progress: false
+
+jobs:
+  wait-and-send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - name: Wait until due time
+        id: wait
+        env:
+          RUN_AT: ${{ inputs.run_at }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          now=$(date +%s); target=$(date -d "$RUN_AT" +%s)
+          if [ "$target" -gt "$now" ]; then
+            wait=$((target - now + 2)); max=19800   # 5.5h
+            if [ "$wait" -gt "$max" ]; then
+              echo "due in ${wait}s: sleeping ${max}s, then handing over to a new run"
+              sleep "$max"
+              gh workflow run send-scheduled.yml --repo "$GITHUB_REPOSITORY" -f run_at="$RUN_AT"
+              echo "hop=1" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+            echo "sleeping ${wait}s"; sleep "$wait"
+          fi
+          echo "hop=0" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        if: steps.wait.outputs.hop == '0'
+      - uses: actions/setup-node@v4
+        if: steps.wait.outputs.hop == '0'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: scripts/package-lock.json
+      - name: Install
+        if: steps.wait.outputs.hop == '0'
+        working-directory: scripts
+        run: npm ci --no-audit --no-fund
+      - name: Send due pushes
+        if: steps.wait.outputs.hop == '0'
+        working-directory: scripts
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ vars.VAPID_SUBJECT }}
+          SITE_URL: ${{ vars.SITE_URL }}
+        run: node send-pushes.js
