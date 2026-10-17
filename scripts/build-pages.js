@@ -74,6 +74,7 @@ const walk = (dir, out = []) => {
 const cfgPath = path.join(OUT, 'config.js');
 fs.writeFileSync(cfgPath, 'self.GENTEI_CONFIG=' + JSON.stringify(mode === 'firebase' ? { apiBase: 'firebase', firebase: fbConfig, adminEmails, github: process.env.GITHUB_REPOSITORY ? { repo: process.env.GITHUB_REPOSITORY, workflow: 'send-push.yml', ref: 'main' } : undefined } : { apiBase: api }) + ';\n' + fs.readFileSync(cfgPath, 'utf8'));
 
+const BUILD_STAMP = Date.now().toString(36);
 // ---- html: noindex meta, absolute og:image ----
 const robotsMeta = '<meta name="robots" content="noindex, nofollow, noarchive">';
 for (const f of walk(OUT).filter(f => f.endsWith('.html'))) {
@@ -81,6 +82,8 @@ for (const f of walk(OUT).filter(f => f.endsWith('.html'))) {
   if (noindex && !/name=["']robots["']/i.test(s)) {
     s = /<meta charset[^>]*>/i.test(s) ? s.replace(/(<meta charset[^>]*>)/i, '$1\n' + robotsMeta) : s.replace(/<head[^>]*>/i, m => m + '\n' + robotsMeta);
   }
+  // cache-busting stamp on local script/stylesheet references (GitHub Pages caches for 10 min)
+  s = s.replace(/(<script[^>]*\ssrc=|<link[^>]*\shref=)"((?!https?:|\/\/|data:)[^"?#]+\.(?:js|css))"/g, (m, a, u) => a + '"' + u + '?v=' + BUILD_STAMP + '"');
   if (origin) s = s.replace(/(<meta property="og:image" content=")(?!https?:)([^"]*)(")/g, (m, a, u, c) => a + origin + base + u.replace(/^\.?\//, '') + c);
   fs.writeFileSync(f, s);
 }

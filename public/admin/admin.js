@@ -216,12 +216,19 @@ async function vPushes(v) {
 }
 /* ---------- instant push (free plan): queue in Firestore + start the GitHub Actions sender right away ---------- */
 const GH_TOKEN_KEY = 'gentei.ghToken';
+const askToken = (repo) => new Promise(res => {
+  let done = false; const fin = (v, close) => { if (done) return; done = true; close(); res(v); };
+  modal({ title: 'GitHubトークンの入力(初回のみ)',
+    body: `<p style="line-height:1.7;font-size:13px">「今すぐ送信」でGitHubの送信ジョブを起動するために、アクセストークンが必要です。<b>この端末のブラウザにだけ</b>保存されます。<br>作り方: GitHub &gt; Settings &gt; Developer settings &gt; Fine-grained tokens<br>・Repository: <b>${esc(repo)}</b> のみ<br>・Permissions: <b>Actions = Read and write</b></p><label class="f">トークン<input type="password" id="ght" autocomplete="off" placeholder="github_pat_..."></label>`,
+    footer: '<button class="btn" data-n>キャンセル</button><button class="btn red" data-y>保存して送信</button>',
+    onMount: (el, close) => { el.querySelector('[data-n]').onclick = () => fin('', close); el.querySelector('[data-y]').onclick = () => fin(el.querySelector('#ght').value.trim(), close); el.querySelector('#ght').focus(); } });
+});
 async function dispatchSender() {
   const g = (self.GENTEI_CONFIG || {}).github;
   if (!g || !g.repo) throw new Error('GitHub連携の設定がありません');
   let tk = ''; try { tk = localStorage.getItem(GH_TOKEN_KEY) || ''; } catch (e) {}
   if (!tk) {
-    tk = (prompt('今すぐ送信には、GitHubのアクセストークンが必要です(この端末のブラウザにだけ保存されます)。\n\n作り方: GitHub > Settings > Developer settings > Fine-grained tokens\n・Repository: ' + g.repo + ' だけ\n・Permissions: Actions = Read and write\n\nトークンを貼り付けてください:') || '').trim();
+    tk = await askToken(g.repo);
     if (!tk) throw new Error('トークンが未入力のため、5分ごとの自動送信を待ちます');
   }
   const r = await fetch(`https://api.github.com/repos/${g.repo}/actions/workflows/${g.workflow || 'send-push.yml'}/dispatches`, {
@@ -261,8 +268,8 @@ function pushModal(p) {
         const b = val(); if (!b.title) throw new Error('タイトルを入力してください');
         return p ? api('/pushes/' + p.id, { method: 'PUT', body: b }) : api('/pushes', { method: 'POST', body: b });
       };
-      el.querySelector('[data-s]').onclick = guard(async () => { await save(); toast('下書きを保存しました'); close(); route(); });
-      el.querySelector('[data-n]').onclick = guard(async () => {
+      el.querySelector('footer [data-s]').onclick = guard(async () => { await save(); toast('下書きを保存しました'); close(); route(); });
+      el.querySelector('footer [data-n]').onclick = guard(async () => {
         if (!await confirmBox('この内容で今すぐ送信しますか?')) return;
         const saved = await save(); const r = await api(`/pushes/${saved.id || p.id}/send`, { method: 'POST' });
         const pr = el.querySelector('#pr');
@@ -274,8 +281,8 @@ function pushModal(p) {
           const done = await waitSent(id, i => { pr.textContent = '配信中です…(' + (i + 1) * 5 + '秒)'; });
           pr.textContent = done ? `送信完了: ${done.sentCount ?? 0}件に配信しました` : '送信を開始しました。完了まで少しかかります(一覧で確認してください)';
           toast(done ? `送信完了(${done.sentCount ?? 0}件)` : '送信を開始しました');
-        } catch (e) { pr.style.color = 'var(--red)'; pr.textContent = '送信を予約しました(' + (e.message || e) + ')'; toast('予約しました(最大5分以内に配信)', true); await new Promise(res => setTimeout(res, 2600)); }
-        close(); route();
+        } catch (e) { pr.style.color = 'var(--red)'; pr.textContent = '送信を予約しました(' + (e.message || e) + ')'; toast('予約しました(最大5分以内に配信)', true); route(); return; }
+        setTimeout(() => { close(); route(); }, 1600);
       });
     } });
 }
