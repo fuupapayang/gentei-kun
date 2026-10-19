@@ -205,6 +205,7 @@ async function vPushes(v) {
     <td>${(p.targetTags || []).length ? tagHtml(p.targetTags) : '<span class="note">全員</span>'}</td>
     <td><button class="ibtn" data-e="${esc(p.id)}" title="編集">✏️</button><button class="ibtn" data-d="${esc(p.id)}" title="削除">🗑️</button></td></tr>`).join('') || '<tr><td colspan="5" class="empty">配信がありません</td></tr>'}
   </tbody></table></div>`;
+  if (FB) { const t = document.createElement('div'); t.className = 'note'; t.style.margin = '-4px 0 10px'; v.querySelector('h2').after(t); ghTokenStatus(t); }
   v.querySelector('#new').onclick = () => pushModal(null);
   const rq = v.querySelector('#runq');
   if (rq) rq.onclick = guard(async () => { await dispatchSender(); toast('配信を開始しました(約30秒)'); setTimeout(route, 30000); });
@@ -236,10 +237,25 @@ async function dispatchSender(workflow, inputs) {
   const r = await fetch(`https://api.github.com/repos/${g.repo}/actions/workflows/${workflow || g.workflow || 'send-push.yml'}/dispatches`, {
     method: 'POST', headers: { Authorization: 'Bearer ' + tk, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
     body: JSON.stringify(inputs ? { ref: g.ref || 'main', inputs } : { ref: g.ref || 'main' }) });
-  if (r.status === 401 || r.status === 403 || r.status === 404) { try { localStorage.removeItem(GH_TOKEN_KEY); } catch (e) {} throw new Error('GitHubトークンが無効です(権限: Actions=Read and write)。もう一度お試しください'); }
+  if (r.status === 401) { try { localStorage.removeItem(GH_TOKEN_KEY); } catch (e) {} throw new Error('GitHubトークンの期限が切れたか、無効です。もう一度入力してください(期限は長め、または無期限にして作成)'); }
+  if (r.status === 403 || r.status === 404) throw new Error('GitHubトークンの権限が足りません(Repository=' + g.repo + '、Actions=Read and write)。トークンの設定を確認してください (' + r.status + ')');
   if (!r.ok) throw new Error('GitHubの起動に失敗しました(' + r.status + ')');
   try { localStorage.setItem(GH_TOKEN_KEY, tk); } catch (e) {}
 }
+/* shows whether this browser has a working GitHub token, and when it expires */
+async function ghTokenStatus(el) {
+  const m = location.hostname.match(/^([^.]+)\.github\.io$/), seg = location.pathname.split('/')[1];
+  const g = (self.GENTEI_CONFIG || {}).github || (m && seg ? { repo: m[1] + '/' + seg } : null); if (!g || !el) return;
+  let tk = ''; try { tk = localStorage.getItem(GH_TOKEN_KEY) || ''; } catch (e) {}
+  if (!tk) { el.innerHTML = '🔑 GitHubトークン: <b style="color:var(--red)">未保存</b>(このブラウザでは未入力です。今すぐ送信・予約送信の初回に入力します)'; return; }
+  try {
+    const r = await fetch(`https://api.github.com/repos/${g.repo}`, { headers: { Authorization: 'Bearer ' + tk, Accept: 'application/vnd.github+json' } });
+    if (r.status === 401) { try { localStorage.removeItem(GH_TOKEN_KEY); } catch (e) {} el.innerHTML = '🔑 GitHubトークン: <b style="color:var(--red)">期限切れ・無効</b>(次の送信時に再入力してください)'; return; }
+    const ex = r.headers.get('github-authentication-token-expiration');
+    el.innerHTML = '🔑 GitHubトークン: <b style="color:var(--green)">保存済み</b>' + (ex ? `(期限: ${esc(ex.replace(/ UTC$/, ''))})` : '');
+  } catch (e) { el.innerHTML = '🔑 GitHubトークン: 保存済み(状態の確認はできませんでした)'; }
+}
+
 async function waitSent(id, onTick) {
   for (let i = 0; i < 24; i++) {
     await new Promise(res => setTimeout(res, 5000));
