@@ -266,10 +266,19 @@ const eq = (a, b, msg) => { assert.deepStrictEqual(a, b, msg); n++; };
     let threw = false; try { await sdk.fs.updateDoc(ref, bad); } catch (e) { threw = e.code === 'permission-denied'; }
     ok(threw, 'escalation rejected: ' + Object.keys(bad));
   }
-  for (const [c, id] of [['customers', 'other'], ['events', null], ['tags', 't001'], ['pushes', 'ps3']]) {
+  for (const [c, id] of [['customers', 'other'], ['events', null], ['tags', 't001'], ['pushes', 'ps3'], ['adminSecrets', 'github']]) {
     let threw = false; try { id ? await sdk.fs.getDoc(sdk.fs.doc(cdb, c, id)) : await sdk.fs.getDocs(sdk.fs.collection(cdb, c)); } catch (e) { threw = true; }
     ok(threw, 'customer cannot read ' + c);
   }
+
+  // github token: stored admin-only, round-trips, deletable; never readable by customers
+  eq((await call('POST', '/admin/login', { email: 'BOSS@example.com', password: 'pw-correct' })).status, 200);
+  eq((await call('GET', '/admin/github-token')).j, { token: '' });
+  eq((await call('PUT', '/admin/github-token', { token: '' })).status, 400);
+  eq((await call('PUT', '/admin/github-token', { token: 'github_pat_X' })).j, { ok: true });
+  eq((await call('GET', '/admin/github-token')).j, { token: 'github_pat_X' });
+  eq((await call('DELETE', '/admin/github-token')).j, { ok: true });
+  eq((await call('GET', '/admin/github-token')).j, { token: '' });
 
   // schedule: future time -> status scheduled; past/invalid rejected; PUT with '' clears it
   eq((await call('POST', '/admin/login', { email: 'BOSS@example.com', password: 'pw-correct' })).status, 200);

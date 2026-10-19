@@ -349,6 +349,13 @@ function ruleSummary(customer, events, contents, conversions = [], now = Date.no
     var r = await adminCtx();
 
     /* pushes */
+    /* GitHub token used by the admin UI to start the sender workflow. Stored in an admin-only doc (rules deny everyone else)
+       so it follows the admin across browsers/devices. */
+    if (p === '/github-token') {
+      if (m === 'GET') { var gt = await getOne(r, 'adminSecrets', 'github'); return { token: (gt && gt.token) || '' }; }
+      if (m === 'PUT') { var tkv = str(body.token, 400); if (!tkv) fail(400, 'token is required'); await setOne(r, 'adminSecrets', 'github', { token: tkv, updatedAt: nowISO() }); return { ok: true }; }
+      if (m === 'DELETE') { await delOne(r, 'adminSecrets', 'github'); return { ok: true }; }
+    }
     if (p === '/pushes') {
       if (m === 'GET') return (await allDocs(r, 'pushes')).sort(byDesc('createdAt'));
       if (m === 'POST') {

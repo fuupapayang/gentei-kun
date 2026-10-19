@@ -224,12 +224,27 @@ const askToken = (repo) => new Promise(res => {
     footer: '<button class="btn" data-n>キャンセル</button><button class="btn red" data-y>保存して送信</button>',
     onMount: (el, close) => { el.querySelector('[data-n]').onclick = () => fin('', close); el.querySelector('[data-y]').onclick = () => fin(el.querySelector('#ght').value.trim(), close); el.querySelector('#ght').focus(); } });
 });
+/* GitHub token: kept in this browser and in the admin-only Firestore doc adminSecrets/github, so a new browser needs no re-entry */
+async function getGhToken() {
+  let tk = ''; try { tk = localStorage.getItem(GH_TOKEN_KEY) || ''; } catch (e) {}
+  if (tk || !FB) return tk;
+  try { tk = ((await api('/github-token')) || {}).token || ''; if (tk) { try { localStorage.setItem(GH_TOKEN_KEY, tk); } catch (e) {} } } catch (e) {}
+  return tk;
+}
+async function saveGhToken(tk) {
+  try { localStorage.setItem(GH_TOKEN_KEY, tk); } catch (e) {}
+  if (FB) { try { await api('/github-token', { method: 'PUT', body: { token: tk } }); } catch (e) { console.warn('token not saved to DB', e); } }
+}
+async function dropGhToken() {
+  try { localStorage.removeItem(GH_TOKEN_KEY); } catch (e) {}
+  if (FB) { try { await api('/github-token', { method: 'DELETE' }); } catch (e) {} }
+}
 async function dispatchSender(workflow, inputs) {
   // config.js may be stale in the browser cache: fall back to <owner>.github.io/<repo>/ from the URL
   const m = location.hostname.match(/^([^.]+)\.github\.io$/), seg = location.pathname.split('/')[1];
   const g = (self.GENTEI_CONFIG || {}).github || (m && seg ? { repo: m[1] + '/' + seg, workflow: 'send-push.yml', ref: 'main' } : null);
   if (!g || !g.repo) throw new Error('GitHub連携の設定がありません');
-  let tk = ''; try { tk = localStorage.getItem(GH_TOKEN_KEY) || ''; } catch (e) {}
+  let tk = await getGhToken();
   if (!tk) {
     tk = await askToken(g.repo);
     if (!tk) throw new Error('トークンが未入力のため、5分ごとの自動送信を待ちます');
@@ -237,20 +252,20 @@ async function dispatchSender(workflow, inputs) {
   const r = await fetch(`https://api.github.com/repos/${g.repo}/actions/workflows/${workflow || g.workflow || 'send-push.yml'}/dispatches`, {
     method: 'POST', headers: { Authorization: 'Bearer ' + tk, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
     body: JSON.stringify(inputs ? { ref: g.ref || 'main', inputs } : { ref: g.ref || 'main' }) });
-  if (r.status === 401) { try { localStorage.removeItem(GH_TOKEN_KEY); } catch (e) {} throw new Error('GitHubトークンの期限が切れたか、無効です。もう一度入力してください(期限は長め、または無期限にして作成)'); }
+  if (r.status === 401) { await dropGhToken(); throw new Error('GitHubトークンの期限が切れたか、無効です。もう一度入力してください(期限は長め、または無期限にして作成)'); }
   if (r.status === 403 || r.status === 404) throw new Error('GitHubトークンの権限が足りません(Repository=' + g.repo + '、Actions=Read and write)。トークンの設定を確認してください (' + r.status + ')');
   if (!r.ok) throw new Error('GitHubの起動に失敗しました(' + r.status + ')');
-  try { localStorage.setItem(GH_TOKEN_KEY, tk); } catch (e) {}
+  await saveGhToken(tk);
 }
 /* shows whether this browser has a working GitHub token, and when it expires */
 async function ghTokenStatus(el) {
   const m = location.hostname.match(/^([^.]+)\.github\.io$/), seg = location.pathname.split('/')[1];
   const g = (self.GENTEI_CONFIG || {}).github || (m && seg ? { repo: m[1] + '/' + seg } : null); if (!g || !el) return;
-  let tk = ''; try { tk = localStorage.getItem(GH_TOKEN_KEY) || ''; } catch (e) {}
-  if (!tk) { el.innerHTML = '🔑 GitHubトークン: <b style="color:var(--red)">未保存</b>(このブラウザでは未入力です。今すぐ送信・予約送信の初回に入力します)'; return; }
+  const tk = await getGhToken();
+  if (!tk) { el.innerHTML = '🔑 GitHubトークン: <b style="color:var(--red)">未保存</b>(今すぐ送信・予約送信の初回に入力します。保存すると、どのブラウザでも使えます)'; return; }
   try {
     const r = await fetch(`https://api.github.com/repos/${g.repo}`, { headers: { Authorization: 'Bearer ' + tk, Accept: 'application/vnd.github+json' } });
-    if (r.status === 401) { try { localStorage.removeItem(GH_TOKEN_KEY); } catch (e) {} el.innerHTML = '🔑 GitHubトークン: <b style="color:var(--red)">期限切れ・無効</b>(次の送信時に再入力してください)'; return; }
+    if (r.status === 401) { await dropGhToken(); el.innerHTML = '🔑 GitHubトークン: <b style="color:var(--red)">期限切れ・無効</b>(次の送信時に再入力してください)'; return; }
     const ex = r.headers.get('github-authentication-token-expiration');
     el.innerHTML = '🔑 GitHubトークン: <b style="color:var(--green)">保存済み</b>' + (ex ? `(期限: ${esc(ex.replace(/ UTC$/, ''))})` : '');
   } catch (e) { el.innerHTML = '🔑 GitHubトークン: 保存済み(状態の確認はできませんでした)'; }
