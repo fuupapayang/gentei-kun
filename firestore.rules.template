@@ -1,5 +1,5 @@
 rules_version = '2';
-// 限定くん — Firestore rules for the serverless (Firebase Spark) deploy.
+// エスコン プライムサイト — Firestore rules for the serverless (Firebase Spark) deploy.
 // firestore.rules is GENERATED from this template:  node scripts/make-rules.js admin1@example.com,admin2@example.com
 // Roles:  admin    = Firebase email/password user whose (lower-cased) e-mail is in the list below  -> full access
 //         customer = Firebase anonymous-auth user (uid) -> only the narrow rights spelled out here

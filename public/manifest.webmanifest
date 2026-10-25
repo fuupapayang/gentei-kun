@@ -1,6 +1,6 @@
 {
-  "name": "限定くん｜会員限定情報",
-  "short_name": "限定くん",
+  "name": "エスコン プライムサイト｜会員限定情報",
+  "short_name": "プライムサイト",
   "description": "ご登録者様だけにお届けする、物件の会員限定情報アプリ",
   "lang": "ja",
   "start_url": "./?source=pwa",

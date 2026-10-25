@@ -1,6 +1,6 @@
-/* 限定くん Service Worker: app-shell offline cache + web push (base-path & cross-origin-API safe) */
+/* プライムサイト Service Worker: app-shell offline cache + web push (base-path & cross-origin-API safe) */
 importScripts('config.js'); // sets self.GENTEI_CONFIG / gUrl / gApi (resolved relative to this file => site root)
-const VERSION = 'gentei-v6';
+const VERSION = 'gentei-v7';
 const BASE = new URL('./', self.location.href).pathname; // "/" locally, "/<repo>/" on GitHub Pages
 const P = p => BASE + p.replace(/^\//, '');
 const SHELL = ['/', '/index.html', '/register.html', '/install.html', '/app.css', '/app.js', '/config.js',
@@ -76,7 +76,7 @@ self.addEventListener('fetch', e => {
 self.addEventListener('push', e => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (_) { d = { body: e.data && e.data.text() }; }
-  const title = d.title || '限定くん｜新着の限定情報';
+  const title = d.title || 'プライムサイト｜新着の限定情報';
   const target = d.url || '/';
   e.waitUntil(self.registration.showNotification(title, {
     body: d.body || '新しい限定情報が届いています',

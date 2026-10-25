@@ -1,4 +1,4 @@
-# 限定くん (APLIKA clone) — 共通仕様 / Shared Contract
+# エスコン プライムサイト (APLIKA clone) — 共通仕様 / Shared Contract
 
 物件(マンション)向け会員登録者専用 PWA。HP登録→ホーム画面追加→限定情報/Push通知→行動ログ→管理画面でAI顧客サマリー。
 Stack: Node(>=20) + Express不使用の素の `node:http` ではなく **express** + **web-push** のみ依存。フロントは依存なしの素のHTML/CSS/JS(ES modules可)。JSONファイル永続化(data/db.json)。
@@ -53,7 +53,7 @@ settings: {adminPassword:"admin", vapid:{publicKey,privateKey}} (VAPID は初回
 5. Service Worker: オフラインキャッシュ + push受信/通知クリックで `/` を開く。manifest standalone。
 
 ## Branding & assets (v2)
-- App name: **限定くん** everywhere (title, manifest name/short_name, headers, install guide, push notification default title, README). "APLIKA" appears nowhere user-facing.
+- App name: **エスコン プライムサイト** everywhere (title, manifest name/short_name, headers, install guide, push notification default title, README). "APLIKA" appears nowhere user-facing.
 - Client: **ES CON (エスコン)**. Logo: `/assets/img/common_escon.svg` (black wordmark with tagline; use on light bg, or CSS `filter: brightness(0) invert(1)` on dark bg). Property logo (white): `/assets/img/common_logo.svg` (Grand Le JADE HAYAMA).
 - Downloaded official assets (user has permission) in `public/assets/img/` and `public/assets/video/`: og_img.jpg, top_mv.jpg(PC key visual), top_mv_sp.jpg(SP), top_concept.jpg, top_access_2/3.jpg, top_design_1.png, top_design_2.png, top_loca_1.jpg, top_plan_1.png, top_entry_merit_{2,3,4,6}.jpg, common_moments_hayama.jpg, common_nav_img.jpg; video: top_sp.mp4 (14MB, vertical), top_access.mp4 (12MB). View them (Read tool) to see what each is before use.
 - Replace generated SVG placeholder art with these real assets wherever sensible (hero, gallery, panorama fallback, video, thumbnails). Keep generated fallbacks only where no real asset fits.

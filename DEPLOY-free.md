@@ -1,4 +1,4 @@
-# 限定くん 無料デプロイ手順 (GitHub Pages + Firebase Spark)
+# エスコン プライムサイト 無料デプロイ手順 (GitHub Pages + Firebase Spark)
 
 構成: フロント=GitHub Pages(public リポジトリ) / DB・認証=Firestore + Firebase Auth(Spark=無料) / Push送信=GitHub Actions(5分毎)。
 Cloud Functions・Blaze(課金)は不要。`DEPLOY.md` / `DEPLOY-backend.md` は旧構成なので使わない。
@@ -39,7 +39,7 @@ node gen-vapid.js --write                 # 公開鍵を Firestore settings/publ
 ## 3. GitHub リポジトリ・Secrets・Variables
 ```
 cd aplika
-git init -b main && git add -A && git commit -m "限定くん initial"
+git init -b main && git add -A && git commit -m "エスコン プライムサイト initial"
 gh repo create <repo> --public --source . --remote origin     # public 必須(無料)
 
 gh secret set FIREBASE_SERVICE_ACCOUNT < ~/Downloads/sa.json

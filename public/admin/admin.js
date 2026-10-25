@@ -75,7 +75,7 @@ const confirmBox = (msg) => new Promise(res => {
 function renderLogin() {
   $app.innerHTML = `<div class="login-wrap"><form class="login" id="lf">
     <img class="login-logo" src="${gUrl('/assets/img/common_escon.svg')}" alt="ES CON エスコン" onerror="this.style.display='none'">
-    <h1><span class="brand-logo lg" role="img" aria-label="IKIIKI"></span>限定くん マネージャー</h1><p>限定くん 管理コンソール</p>
+    <h1><span class="brand-logo lg" role="img" aria-label="IKIIKI"></span>プライムサイト マネージャー</h1><p>プライムサイト 管理コンソール</p>
  ${FB ? '<label class="f">メールアドレス<input type="email" id="em" autofocus autocomplete="username"></label>' : ''}
     <label class="f">パスワード<input type="password" id="pw" ${FB ? '' : 'autofocus'} autocomplete="current-password"></label>
     <button class="btn blue" style="width:100%;justify-content:center;padding:11px">ログイン</button>
@@ -111,7 +111,7 @@ function renderShell() {
   $app.innerHTML = `
   <div class="topbar">
     <button class="menu-toggle" id="mt">☰</button>
-    <div class="brand"><span class="brand-logo" role="img" aria-label="IKIIKI"></span>限定くん<span>マネージャー</span></div>
+    <div class="brand"><span class="brand-logo" role="img" aria-label="IKIIKI"></span>プライムサイト<span>マネージャー</span></div>
     <img class="topbar-logo" src="${gUrl('/assets/img/common_escon.svg')}" alt="ES CON" onerror="this.style.display='none'">
     <div class="prop" title="${esc(propTitle())}">🏢 ${esc(propTitle())}</div>
     <button class="logout" id="lo">ログアウト</button>
@@ -293,7 +293,7 @@ function pushModal(p) {
     <label class="f">詳細通知URL <small>(タップ時に開くリンク)</small><input type="url" id="pu" placeholder="https://" value="${esc(p?.url)}"></label>
     <div class="f" style="font-weight:600;font-size:13px">対象タグ <small style="font-weight:400;color:var(--mut)">(未選択=全員)</small><div class="chips" id="pc"></div></div>
     ${FB ? `<label class="f">送信予約日時 <small>(空欄=予約しない。指定した時刻以降の次回の定期実行で配信)</small><input type="datetime-local" id="ps" value="${esc(toLocalInput(p?.status === 'scheduled' ? p.scheduledAt : ''))}"></label>` : ''}
-    <div class="pushprev"><img src="${gUrl('/assets/img/top_concept.jpg')}" alt=""><div><small>限定くん ・ いま</small><b id="ppt">${esc(p?.title) || 'タイトル'}</b><span id="ppb">${esc((p?.body || '').slice(0, 60)) || '本文がここに表示されます'}</span></div></div>
+    <div class="pushprev"><img src="${gUrl('/assets/img/top_concept.jpg')}" alt=""><div><small>プライムサイト ・ いま</small><b id="ppt">${esc(p?.title) || 'タイトル'}</b><span id="ppb">${esc((p?.body || '').slice(0, 60)) || '本文がここに表示されます'}</span></div></div>
     ${sent ? `<p class="note">送信済み: ${p.sentCount ?? 0}件に配信</p>` : ''}<p id="pr" style="font-weight:700;color:var(--green)"></p>`,
     footer: `<button class="btn" data-s>下書き保存</button>${FB ? '<button class="btn blue" data-r>予約送信</button>' : ''}<button class="btn red" data-n>今すぐ送信</button>`,
     onMount: (el, close) => {

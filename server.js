@@ -313,7 +313,7 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, () => {
-  console.log(`限定くん server: http://localhost:${PORT}  (admin: /admin/, tool: /tool/)`);
+  console.log(`プライムサイト server: http://localhost:${PORT}  (admin: /admin/, tool: /tool/)`);
   console.log(`admin password: ${process.env.ADMIN_PASSWORD ? '(from ADMIN_PASSWORD)' : db.settings.adminPassword}`);
   const demo = db.customers.find((c) => c.token === store.DEMO_TOKEN);
   if (demo) console.log(`demo customer token (${demo.name}): ${demo.token}`);

@@ -1,4 +1,4 @@
-# 限定くん — Firebase (Spark) クライアント実装メモ
+# エスコン プライムサイト — Firebase (Spark) クライアント実装メモ
 
 サーバー無し構成(SPEC v4)。`GENTEI_CONFIG.apiBase === "firebase"` のとき `public/firebase-api.js` が `window.fetch` を差し替え、
 `gApi()` が作る全リクエスト(顧客アプリ / 管理画面 / 営業ツール)を Firestore + Firebase Auth で応答する(JSON形・ステータスは `server.js` と同じ)。

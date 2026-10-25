@@ -2,7 +2,7 @@
   "name": "gentei-kun-functions",
   "version": "1.0.0",
   "private": true,
-  "description": "限定くん API (Firebase Cloud Functions 2nd gen + Firestore)",
+  "description": "エスコン プライムサイト API (Firebase Cloud Functions 2nd gen + Firestore)",
   "main": "index.js",
   "engines": { "node": "22" },
   "scripts": {

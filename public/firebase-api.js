@@ -1,4 +1,4 @@
-/* 限定くん — Firebase (Spark / no server) client shim.
+/* プライムサイト — Firebase (Spark / no server) client shim.
  *
  * When GENTEI_CONFIG.apiBase === "firebase", every request built with gApi() (customer app, admin console, sales tool)
  * is answered HERE from Firestore / Firebase Auth, returning the same JSON shapes + status codes the Express server

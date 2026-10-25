@@ -1,4 +1,4 @@
-# 限定くん デプロイ手順 (テストリリース)
+# エスコン プライムサイト デプロイ手順 (テストリリース)
 
 構成: **GitHub Pages**(静的フロント, `public/` → `dist/`) + **Firebase**(Firestore + Cloud Functions `api`)。
 フロントは `https://<github-user>.github.io/<repo>/` に置かれ、API は別オリジン(Cloud Functions)を呼びます。
@@ -24,7 +24,7 @@ https://asia-northeast1-<firebase-project-id>.cloudfunctions.net/api
 ```
 cd aplika
 git init -b main
-git add -A && git commit -m "限定くん initial"
+git add -A && git commit -m "エスコン プライムサイト initial"
 gh repo create <repo> --public --source . --remote origin     # Pages(無料)は public が簡単。private は有料プランのみ
 gh variable set API_BASE --body "https://asia-northeast1-<firebase-project-id>.cloudfunctions.net/api"
 ```

@@ -43,7 +43,7 @@
         h('div', { class: 'row' },
           h('button', { class: 'btn pri', onclick: () => { const o = {}; Object.keys(s).forEach((k) => { const e = T.$('#st-' + k, p.body); if (e) o[k] = e.value.trim(); }); T.settings.save(o); T.toast('設定を保存しました'); } }, '保存'),
           h('button', { class: 'btn', onclick: () => { if (confirm('保存済みのシナリオ・レイアウト・設定をすべて削除しますか?')) { Object.keys(localStorage).filter((k) => k.startsWith('genteikun.tool.')).forEach((k) => localStorage.removeItem(k)); T.toast('初期化しました'); p.close(); } } }, 'データ初期化')),
-        h('div', { class: 'set-foot' }, h('span', {}, '提供 株式会社エスコン'), h('img', { src: gUrl('/assets/img/common_escon.svg'), alt: 'ES CON', onerror: function () { this.style.display = 'none'; } }), h('span', {}, '限定くん'))));
+        h('div', { class: 'set-foot' }, h('span', {}, '提供 株式会社エスコン'), h('img', { src: gUrl('/assets/img/common_escon.svg'), alt: 'ES CON', onerror: function () { this.style.display = 'none'; } }), h('span', {}, 'プライムサイト'))));
       p.body.append(wrap);
     },
   };

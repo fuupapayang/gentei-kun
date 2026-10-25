@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* 限定くん: build public/ -> dist/ for GitHub Pages (served under a sub-path, talking to a cross-origin API).
+/* プライムサイト: build public/ -> dist/ for GitHub Pages (served under a sub-path, talking to a cross-origin API).
  *
  *   node scripts/build-pages.js --api https://asia-northeast1-<proj>.cloudfunctions.net/api --base /<repo>/
  *
@@ -94,7 +94,7 @@ fs.writeFileSync(path.join(OUT, '.nojekyll'), '');
 fs.writeFileSync(path.join(OUT, '404.html'), `<!doctype html>
 <html lang="ja"><head><meta charset="utf-8">
 ${noindex ? robotsMeta + '\n' : ''}<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ページが見つかりません｜限定くん</title>
+<title>ページが見つかりません｜エスコン プライムサイト</title>
 <style>body{font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f5f6f8;color:#222;text-align:center}
 .b{padding:32px 24px}h1{font-size:20px;margin:0 0 8px}p{margin:0 0 20px;color:#666;font-size:14px}a{display:inline-block;background:#c00000;color:#fff;text-decoration:none;padding:12px 28px;border-radius:999px;font-size:14px}</style>
 </head><body><div class="b"><h1>ページが見つかりません</h1><p>お探しのページは存在しないか、移動した可能性があります。</p><a href="${base}">TOPへ戻る</a></div></body></html>

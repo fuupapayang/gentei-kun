@@ -1,4 +1,4 @@
-/* 限定くん runtime config (shared by customer pages / admin / tool / service worker).
+/* プライムサイト runtime config (shared by customer pages / admin / tool / service worker).
  * The Pages build overwrites this file with the real apiBase.
  *   apiBase: "" => same-origin "/api" (local `npm start`)
  *            "https://.../api" => cross-origin API root (what "/api" maps to)

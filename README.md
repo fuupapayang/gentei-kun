@@ -1,4 +1,4 @@
-# 限定くん (会員限定PWA)
+# エスコン プライムサイト (会員限定PWA)
 
     npm install && npm start      # http://localhost:3000  (PORT で変更)
 
