@@ -260,6 +260,35 @@ function ruleSummary(customer, events, contents, conversions = [], now = Date.no
     return Object.assign({ id: 'p0061' }, p);
   }
 
+  /* ---- claim code ("引き継ぎコード"): 8 chars, unambiguous alphabet (no 0/O/1/I/L), stored upper-case without the dash ---- */
+  var CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; /* 31 chars; 248 = 31*8 -> unbiased rejection sampling */
+  var CODE_RE = /^[ABCDEFGHJKMNPQRSTUVWXYZ2-9]{8}$/;
+  var normCode = function (s) { return String(s == null ? '' : s).toUpperCase().replace(/[^A-Z0-9]/g, ''); };
+  function randomCode() {
+    var out = '';
+    while (out.length < 8) {
+      var a = new Uint8Array(16);
+      if (G.crypto && G.crypto.getRandomValues) G.crypto.getRandomValues(a); else for (var i = 0; i < a.length; i++) a[i] = Math.floor(Math.random() * 256);
+      for (var j = 0; j < a.length && out.length < 8; j++) if (a[j] < 248) out += CODE_ALPHABET.charAt(a[j] % 31);
+    }
+    return out;
+  }
+  var lsRead = function (k) { try { return G.document && G.localStorage ? G.localStorage.getItem(k) : null; } catch (e) { return null; } };
+  /* the claim code of customer `uid`: reuse the one remembered in this browser if it is really ours, else mint a new one */
+  async function ensureClaimCode(r, uid, c, t) {
+    var mine = normCode(lsRead('aplika.claimCode'));
+    if (CODE_RE.test(mine)) { var ex = await getOne(r, 'claimCodes', mine).catch(function () { return null; }); if (ex && ex.uid === uid) return mine; }
+    for (var k = 0; k < 6; k++) {
+      var code = randomCode();
+      try {
+        if (await getOne(r, 'claimCodes', code)) continue; /* taken (astronomically rare) */
+        await setOne(r, 'claimCodes', code, { uid: uid, name: c.name, email: c.email, tags: c.tags || [], createdAt: t });
+        return code;
+      } catch (e) { if (!(e && String(e.code || '').indexOf('permission-denied') >= 0)) throw e; }
+    }
+    return null;
+  }
+
   async function register(body) {
     var name = str(body.name, 100), email = str(body.email, 200).toLowerCase();
     if (!name) fail(400, 'name is required');
@@ -275,8 +304,28 @@ function ruleSummary(customer, events, contents, conversions = [], now = Date.no
       c = { name: name, email: email, tags: tags.slice(0, 10), status: '新規', assignee: '', memo: '', createdAt: t, lastSeenAt: t, pushSub: null, installed: false, platform: 'pc' };
       await setOne(r, 'customers', u.uid, c);
     }
+    var claimCode = null;
+    if (!c.primaryId) { try { claimCode = await ensureClaimCode(r, u.uid, c, t); } catch (e) { /* non-fatal: registration itself succeeded */ } }
     try { await S.fs.addDoc(S.fs.collection(r.db, 'events'), { customerId: u.uid, type: 'page', target: '/' + 'register.html', at: nowISO() }); } catch (e) { /* non-fatal */ }
-    return { customer: custView(c, u.uid), token: u.uid };
+    return { customer: custView(c, u.uid), token: u.uid, claimCode: claimCode };
+  }
+
+  /* POST /claim {code}: this (new) anonymous identity becomes an alias customer of the code's owner */
+  async function claim(body) {
+    var code = normCode(body.code);
+    if (!CODE_RE.test(code)) fail(404, 'code not found');
+    var r = await role('customer'), u = await authReady(r);
+    if (!u) u = (await S.auth.signInAnonymously(r.auth)).user;
+    var cl = await getOne(r, 'claimCodes', code);
+    if (!cl) fail(404, 'code not found');
+    var c = await getOne(r, 'customers', u.uid), t = nowISO();
+    if (c) {
+      if (c.primaryId === cl.uid || cl.uid === u.uid) return { customer: custView(c, u.uid), token: u.uid, claimCode: code };
+      fail(409, 'already registered');
+    }
+    c = { name: cl.name, email: cl.email, tags: (cl.tags || []).slice(0, 10), status: '新規', assignee: '', memo: '', createdAt: t, lastSeenAt: t, pushSub: null, installed: false, platform: 'pc', primaryId: cl.uid, claimCode: code };
+    await setOne(r, 'customers', u.uid, c);
+    return { customer: custView(c, u.uid), token: u.uid, claimCode: code };
   }
 
   async function customerRoute(m, p, body) {
@@ -290,6 +339,10 @@ function ruleSummary(customer, events, contents, conversions = [], now = Date.no
       var cs = await allDocs(r, 'contents', [W('active', '==', true)]);
       var contents = cs.filter(function (c) { return c.active && matches(c.targetTags, x.c.tags); }).sort(function (a, b) { return (a.order || 0) - (b.order || 0); });
       var personalFiles = await allDocs(r, 'personalFiles', [W('customerId', '==', x.uid)]);
+      if (x.c.primaryId) { /* device linked by a claim code: also the primary customer's personal folder */
+        var pf2 = await allDocs(r, 'personalFiles', [W('customerId', '==', x.c.primaryId)]);
+        personalFiles = personalFiles.concat(pf2).sort(byDesc('createdAt'));
+      }
       return { contents: contents, personalFiles: personalFiles };
     }
     if (m === 'GET' && p === '/pushes') {
@@ -303,6 +356,10 @@ function ruleSummary(customer, events, contents, conversions = [], now = Date.no
       if (PLATFORMS.indexOf(body.platform) >= 0) up.platform = body.platform;
       await patch(r, 'customers', x.uid, up);
       return { ok: true };
+    }
+    if (m === 'POST' && p === '/claim-code') { /* customers registered before claim codes existed: mint (or re-read) their code */
+      if (x.c.primaryId) return { claimCode: x.c.claimCode || null };
+      return { claimCode: await ensureClaimCode(r, x.uid, x.c, nowISO()) };
     }
     if (m === 'POST' && p === '/event') {
       if (EVENT_TYPES.indexOf(body.type) < 0) fail(400, 'invalid event type');
@@ -333,6 +390,39 @@ function ruleSummary(customer, events, contents, conversions = [], now = Date.no
     return null;
   }
   var colorOk = function (v) { return /^#[0-9a-fA-F]{3,8}$/.test(v || ''); };
+
+  /* ---- customer groups (primary + aliases) ---- */
+  async function loadGroups(r) {
+    var cs = await allDocs(r, 'customers'), byId = {}, groups = {};
+    cs.forEach(function (c) { byId[c.id] = c; });
+    var rootOf = function (c) { var h = 0; while (c.primaryId && byId[c.primaryId] && c.primaryId !== c.id && h++ < 10) c = byId[c.primaryId]; return c; };
+    cs.forEach(function (c) { var rt = rootOf(c); (groups[rt.id] = groups[rt.id] || { root: rt, members: [rt] }); if (rt.id !== c.id) groups[rt.id].members.push(c); });
+    return { cs: cs, byId: byId, rootOf: rootOf, groups: groups };
+  }
+  async function groupFor(r, c) { /* group of any member doc, without reading every customer */
+    var h = 0;
+    while (c.primaryId && c.primaryId !== c.id && h++ < 10) { var up = await getOne(r, 'customers', c.primaryId); if (!up) break; c = up; }
+    var members = [c], seen = {}, frontier = [c.id]; seen[c.id] = 1;
+    for (var depth = 0; depth < 3 && frontier.length; depth++) {
+      var next = [];
+      for (var i = 0; i < frontier.length; i++) (await allDocs(r, 'customers', [W('primaryId', '==', frontier[i])])).forEach(function (a) { if (!seen[a.id]) { seen[a.id] = 1; members.push(a); next.push(a.id); } });
+      frontier = next;
+    }
+    return { root: c, members: members };
+  }
+  function groupView(gr) { /* what the admin UI sees for a group */
+    var m = gr.members, root = gr.root, v = pubCustomer(root);
+    var seenAt = m.map(function (x) { return x.lastSeenAt || ''; }).sort().pop();
+    var inst = m.filter(function (x) { return x.installed; }).sort(byDesc('lastSeenAt'));
+    if (seenAt) v.lastSeenAt = seenAt;
+    v.installed = inst.length > 0;
+    v.platform = (inst[0] || root).platform;
+    v.hasPush = m.some(function (x) { return !!x.pushSub; });
+    if (!root.pushSub) { var wp = m.filter(function (x) { return x.pushSub; })[0]; if (wp) v.pushSub = wp.pushSub; }
+    v.deviceCount = m.length;
+    v.memberIds = m.map(function (x) { return x.id; });
+    return v;
+  }
 
   async function adminRoute(m, p, body) {
     var mm;
@@ -393,37 +483,80 @@ function ruleSummary(customer, events, contents, conversions = [], now = Date.no
       if (m === 'DELETE') { await delOne(r, 'pushes', pp.id); return { ok: true }; }
     }
 
-    /* customers */
+    /* customers. Devices linked by a claim code / merged duplicates are alias docs (customers/{uid}.primaryId = primary id).
+       The admin only ever sees the PRIMARY: aliases are folded into it (events, files, conversions, push, last seen). */
     if (m === 'GET' && p === '/customers') {
-      var cs = await allDocs(r, 'customers');
-      var counts = await Promise.all(cs.map(function (c) { return count(r, 'events', [W('customerId', '==', c.id)]).catch(function () { return 0; }); }));
-      return cs.map(function (c, i) { return Object.assign(pubCustomer(c), { eventCount: counts[i] }); });
+      var g0 = await loadGroups(r);
+      var counts = await Promise.all(g0.cs.map(function (c) { return count(r, 'events', [W('customerId', '==', c.id)]).catch(function () { return 0; }); }));
+      var evOf = {}; g0.cs.forEach(function (c, i) { evOf[c.id] = counts[i]; });
+      return g0.cs.filter(function (c) { return g0.rootOf(c).id === c.id; }).map(function (c) {
+        var gr = g0.groups[c.id];
+        return Object.assign(groupView(gr), { eventCount: gr.members.reduce(function (t, x) { return t + (evOf[x.id] || 0); }, 0) });
+      });
+    }
+    if (m === 'POST' && p === '/customers/merge-duplicates') { /* group by identical e-mail (case-insensitive); oldest createdAt = primary */
+      var g1 = await loadGroups(r), byEmail = {}, ops1 = [], merged = 0, ngroups = 0;
+      g1.cs.filter(function (c) { return g1.rootOf(c).id === c.id; }).forEach(function (c) {
+        var e = String(c.email || '').trim().toLowerCase(); if (e) (byEmail[e] = byEmail[e] || []).push(c);
+      });
+      var emails = Object.keys(byEmail);
+      for (var ei = 0; ei < emails.length; ei++) {
+        var lst = byEmail[emails[ei]]; if (lst.length < 2) continue;
+        lst.sort(function (x, y) { return String(x.createdAt || '').localeCompare(String(y.createdAt || '')) || (x.id < y.id ? -1 : 1); });
+        var prim = lst[0], gone = lst.slice(1), goneIds = gone.map(function (x) { return x.id; });
+        var tagU = []; lst.forEach(function (x) { (x.tags || []).forEach(function (t) { if (tagU.indexOf(t) < 0) tagU.push(t); }); });
+        var all = g1.groups[prim.id].members.slice(); gone.forEach(function (x) { all = all.concat(g1.groups[x.id].members.filter(function (y) { return y.id !== x.id; }), [x]); });
+        all.forEach(function (x) {
+          var u2 = { tags: tagU };
+          if (x.id !== prim.id && x.primaryId !== prim.id) u2.primaryId = prim.id; /* demoted ones + their own aliases are re-pointed at the new primary */
+          if (x.id === prim.id && JSON.stringify(x.tags || []) === JSON.stringify(tagU)) return;
+          ops1.push(function (b) { b.update(S.fs.doc(r.db, 'customers', x.id), clean(u2)); });
+        });
+        for (var gi = 0; gi < all.length; gi++) { /* claim codes of demoted customers now belong to the primary; all codes carry the merged tags */
+          var cds = await allDocs(r, 'claimCodes', [W('uid', '==', all[gi].id)]);
+          cds.forEach(function (d) { var up = { tags: tagU }; if (d.uid !== prim.id) up.uid = prim.id; ops1.push(function (b) { b.update(S.fs.doc(r.db, 'claimCodes', d.id), up); }); });
+        }
+        merged += gone.length; ngroups++;
+      }
+      if (ops1.length) await commitChunks(r, ops1);
+      return { ok: true, merged: merged, groups: ngroups };
     }
     if ((mm = p.match(/^\/customers\/([^/]+)(?:\/(files|events|summary)(?:\/([^/]+))?)?$/))) {
       var cid = mm[1], sub = mm[2], fid = mm[3];
       var c = await getOne(r, 'customers', cid); if (!c) fail(404, 'not found');
+      var gr = await groupFor(r, c), ids = gr.members.map(function (x) { return x.id; }); /* the whole group; gr.root is who the admin sees */
+      cid = gr.root.id; c = gr.root;
       if (!sub) {
-        if (m === 'GET') return pubCustomer(c);
+        if (m === 'GET') return groupView(gr);
         if (m === 'PUT') {
           var cu = {};
           if (body.tags !== undefined) { var ta = strArr(body.tags); if (!ta) fail(400, 'tags must be array'); cu.tags = ta; }
           if (body.status !== undefined) cu.status = str(body.status, 50);
           if (body.assignee !== undefined) cu.assignee = str(body.assignee, 50);
           if (body.memo !== undefined) cu.memo = str(body.memo, 5000);
-          if (Object.keys(cu).length) await patch(r, 'customers', cid, cu);
-          return pubCustomer(Object.assign(c, cu));
+          if (Object.keys(cu).length) { /* mirror to the primary AND every alias (alias tags drive that device's content / push targeting) */
+            var pops = ids.map(function (id) { return function (b) { b.update(S.fs.doc(r.db, 'customers', id), clean(cu)); }; });
+            if (cu.tags) for (var pi = 0; pi < ids.length; pi++) (await allDocs(r, 'claimCodes', [W('uid', '==', ids[pi])])).forEach(function (d) { pops.push(function (b) { b.update(S.fs.doc(r.db, 'claimCodes', d.id), { tags: cu.tags }); }); });
+            await commitChunks(r, pops);
+            gr.members.forEach(function (x) { Object.assign(x, cu); });
+          }
+          return groupView(gr);
         }
-        if (m === 'DELETE') { /* erase the customer and everything that belongs to them */
-          var rel = await Promise.all([allDocs(r, 'events', [W('customerId', '==', cid)]), allDocs(r, 'personalFiles', [W('customerId', '==', cid)]), allDocs(r, 'conversions', [W('customerId', '==', cid)])]);
-          var dops = [];
-          [['events', rel[0]], ['personalFiles', rel[1]], ['conversions', rel[2]]].forEach(function (g) { g[1].forEach(function (d) { dops.push(function (b) { b.delete(S.fs.doc(r.db, g[0], d.id)); }); }); });
-          dops.push(function (b) { b.delete(S.fs.doc(r.db, 'customers', cid)); });
+        if (m === 'DELETE') { /* erase the whole group and everything that belongs to it */
+          var rel = [[], [], [], []], dops = [];
+          for (var di = 0; di < ids.length; di++) {
+            var one = await Promise.all([allDocs(r, 'events', [W('customerId', '==', ids[di])]), allDocs(r, 'personalFiles', [W('customerId', '==', ids[di])]), allDocs(r, 'conversions', [W('customerId', '==', ids[di])]), allDocs(r, 'claimCodes', [W('uid', '==', ids[di])])]);
+            for (var oi = 0; oi < 4; oi++) rel[oi] = rel[oi].concat(one[oi]);
+          }
+          [['events', rel[0]], ['personalFiles', rel[1]], ['conversions', rel[2]], ['claimCodes', rel[3]]].forEach(function (g) { g[1].forEach(function (d) { dops.push(function (b) { b.delete(S.fs.doc(r.db, g[0], d.id)); }); }); });
+          ids.forEach(function (id) { dops.push(function (b) { b.delete(S.fs.doc(r.db, 'customers', id)); }); });
           await commitChunks(r, dops);
-          return { ok: true, removed: { events: rel[0].length, files: rel[1].length, conversions: rel[2].length } };
+          return { ok: true, removed: { events: rel[0].length, files: rel[1].length, conversions: rel[2].length, claimCodes: rel[3].length, devices: ids.length } };
         }
       }
+      var byIds = async function (col, field) { var out = []; for (var k = 0; k < ids.length; k++) out = out.concat(await allDocs(r, col, [W(field, '==', ids[k])])); return out; };
       if (sub === 'files') {
-        if (m === 'GET' && !fid) return allDocs(r, 'personalFiles', [W('customerId', '==', cid)]);
+        if (m === 'GET' && !fid) return byIds('personalFiles', 'customerId');
         if (m === 'POST' && !fid) {
           var ft = str(body.title, 200), fu = str(body.url, 1000);
           if (!ft || !fu) fail(400, 'title and url are required');
@@ -432,14 +565,15 @@ function ruleSummary(customer, events, contents, conversions = [], now = Date.no
         }
         if (m === 'DELETE' && fid) {
           var ex = await getOne(r, 'personalFiles', fid);
-          if (!ex || ex.customerId !== cid) fail(404, 'not found');
+          if (!ex || ids.indexOf(ex.customerId) < 0) fail(404, 'not found');
           await delOne(r, 'personalFiles', fid); return { ok: true };
         }
       }
-      if (sub === 'events' && m === 'GET') return (await allDocs(r, 'events', [W('customerId', '==', cid)])).sort(byDesc('at'));
+      if (sub === 'events' && m === 'GET') return (await byIds('events', 'customerId')).sort(byDesc('at'));
       if (sub === 'summary' && m === 'GET') {
-        var res = await Promise.all([allDocs(r, 'events', [W('customerId', '==', cid)]), allDocs(r, 'contents'), allDocs(r, 'conversions', [W('customerId', '==', cid)])]);
-        return ruleSummary(c, res[0], res[1], res[2]);
+        var res = await Promise.all([byIds('events', 'customerId'), allDocs(r, 'contents'), byIds('conversions', 'customerId')]);
+        var cvs = res[2].map(function (x) { return Object.assign({}, x, { customerId: cid }); });
+        return ruleSummary(groupView(gr), res[0], res[1], cvs);
       }
     }
 
@@ -505,17 +639,19 @@ function ruleSummary(customer, events, contents, conversions = [], now = Date.no
     if (p === '/conversions') {
       if (m === 'GET') return (await allDocs(r, 'conversions')).sort(byDesc('at'));
       if (m === 'POST') {
-        if (!(await getOne(r, 'customers', String(body.customerId || '_')))) fail(400, 'unknown customerId');
+        var cvc = await getOne(r, 'customers', String(body.customerId || '_'));
+        if (!cvc) fail(400, 'unknown customerId');
         if (CONV_KINDS.indexOf(body.kind) < 0) fail(400, 'invalid kind');
-        var cv = { id: newId('cv'), customerId: body.customerId, kind: body.kind, at: body.at && !isNaN(Date.parse(body.at)) ? new Date(body.at).toISOString() : nowISO(), note: str(body.note, 500) };
+        var cv = { id: newId('cv'), customerId: (await groupFor(r, cvc)).root.id, kind: body.kind, at: body.at && !isNaN(Date.parse(body.at)) ? new Date(body.at).toISOString() : nowISO(), note: str(body.note, 500) };
         await setOne(r, 'conversions', cv.id, cv); return [201, cv];
       }
     }
 
     if (m === 'GET' && p === '/dashboard') {
       var since = new Date(Date.now() - 7 * 86400000).toISOString();
-      var d = await Promise.all([count(r, 'customers'), count(r, 'customers', [W('installed', '==', true)]), count(r, 'pushes', [W('status', '==', 'sent')]), count(r, 'events', [W('at', '>=', since)]), count(r, 'conversions')]);
-      return { customers: d[0], installed: d[1], pushesSent: d[2], events7d: d[3], conversions: d[4] };
+      var gd = await loadGroups(r), roots = Object.keys(gd.groups).map(function (k) { return gd.groups[k]; }); /* customers = primaries only */
+      var d = await Promise.all([count(r, 'pushes', [W('status', '==', 'sent')]), count(r, 'events', [W('at', '>=', since)]), count(r, 'conversions')]);
+      return { customers: roots.length, installed: roots.filter(function (x) { return x.members.some(function (y) { return y.installed; }); }).length, pushesSent: d[0], events7d: d[1], conversions: d[2] };
     }
 
     if (p === '/property') {
@@ -545,6 +681,7 @@ function ruleSummary(customer, events, contents, conversions = [], now = Date.no
       return { key: s.vapidPublicKey };
     }
     if (method === 'POST' && p === '/register') return register(body);
+    if (method === 'POST' && p === '/claim') return claim(body);
     var out = /^\/admin\//.test(p) ? await adminRoute(method, p.slice(6), body) : await customerRoute(method, p, body);
     if (out === null) fail(404, 'not found');
     return out;

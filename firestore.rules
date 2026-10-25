@@ -39,9 +39,25 @@ service cloud.firestore {
       allow read: if isCustomer() && resource.data.status == 'sent';
     }
 
-    // personal files: only the customer's own (query where customerId == uid)
+    // personal files: the customer's own (query where customerId == uid), plus those of the PRIMARY customer this
+    // device was linked to with a claim code (customers/{uid}.primaryId; query where customerId == primaryId)
     match /personalFiles/{id} {
-      allow read: if isCustomer() && resource.data.customerId == request.auth.uid;
+      allow read: if isCustomer() && (resource.data.customerId == request.auth.uid
+        || resource.data.customerId == get(/databases/$(database)/documents/customers/$(request.auth.uid)).data.get('primaryId', '-'));
+    }
+
+    // claim codes ("引き継ぎコード", doc id = 8 chars, upper-case, no dash): written once at registration by the owner,
+    // readable one-by-one (get) by any customer who knows the code. NEVER listable, updatable or deletable by customers.
+    match /claimCodes/{code} {
+      allow get: if isCustomer();
+      allow create: if isCustomer() && code.matches('^[A-Z0-9]{8}$')
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'email', 'tags', 'createdAt'])
+        && request.resource.data.keys().hasAll(['uid', 'name', 'email', 'tags'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100
+        && request.resource.data.email is string && request.resource.data.email.size() <= 200
+        && request.resource.data.tags is list && request.resource.data.tags.size() <= 10
+        && (!('createdAt' in request.resource.data) || (request.resource.data.createdAt is string && request.resource.data.createdAt.size() <= 40));
     }
 
     // customer profile: doc id == anonymous uid
@@ -49,8 +65,14 @@ service cloud.firestore {
       allow get: if isCustomer() && request.auth.uid == uid;
 
       allow create: if isCustomer() && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['name', 'email', 'tags', 'status', 'assignee', 'memo', 'createdAt', 'lastSeenAt', 'pushSub', 'installed', 'platform'])
+        && request.resource.data.keys().hasOnly(['name', 'email', 'tags', 'status', 'assignee', 'memo', 'createdAt', 'lastSeenAt', 'pushSub', 'installed', 'platform', 'primaryId', 'claimCode'])
         && request.resource.data.keys().hasAll(['name', 'email', 'tags', 'status', 'assignee', 'memo'])
+        // primaryId / claimCode only together, and only when the claim code really belongs to that primary customer
+        && (!request.resource.data.keys().hasAny(['primaryId', 'claimCode'])
+            || (request.resource.data.keys().hasAll(['primaryId', 'claimCode'])
+                && request.resource.data.claimCode is string
+                && request.resource.data.claimCode.matches('^[A-Z0-9]{8}$')
+                && request.resource.data.primaryId == get(/databases/$(database)/documents/claimCodes/$(request.resource.data.claimCode)).data.uid))
         && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100
         && request.resource.data.email is string && request.resource.data.email.size() <= 200
         && request.resource.data.tags is list && request.resource.data.tags.size() <= 10      // self-declared campaign tags at sign-up only (same as the Express version)

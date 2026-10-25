@@ -40,6 +40,31 @@
   function svgURL(svg) { return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg); }
   function fmtDate(t) { if (!t) return ''; var d = new Date(t); if (isNaN(d)) return ''; return d.getFullYear() + '.' + (d.getMonth() + 1) + '.' + d.getDate(); }
 
+  /* ---------- in-app browsers (LINE, Instagram...) cannot add to the home screen ---------- */
+  function detectInApp() {
+    var m = ua.match(/Line\/|Instagram|FBAN|FBAV|FB_IAB|Twitter|MicroMessenger|KAKAOTALK|Snapchat|musical_ly|BytedanceWebview|NAVER\(|Pinterest|GSA\//);
+    if (!m) return '';
+    var map = { 'Line/': 'LINE', Instagram: 'Instagram', FBAN: 'Facebook', FBAV: 'Facebook', FB_IAB: 'Facebook', Twitter: 'X(Twitter)', MicroMessenger: 'WeChat', KAKAOTALK: 'KakaoTalk', Snapchat: 'Snapchat', musical_ly: 'TikTok', BytedanceWebview: 'TikTok', 'NAVER(': 'NAVER', Pinterest: 'Pinterest', 'GSA/': 'Googleアプリ' };
+    return map[m[0]] || 'アプリ内ブラウザ';
+  }
+  function copyText(t) {
+    if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(t);
+    return new Promise(function (res, rej) { try { var a = document.createElement('textarea'); a.value = t; a.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(a); a.select(); document.execCommand('copy'); a.remove(); res(); } catch (e) { rej(e); } });
+  }
+  // strong = install page (cannot continue), otherwise a gentle hint on the register page
+  function showInAppBanner(strong) {
+    var name = detectInApp(); var wrap = $('.wrap'); if (!name || !wrap || $('.inapp')) return;
+    var how = isIOS ? '画面の右下または右上の「…」・共有マークから<b style="display:inline;font-size:inherit;color:inherit">「Safariで開く」</b>を選んでください。' : 'メニュー（︙）から<b style="display:inline;font-size:inherit;color:inherit">「ブラウザで開く」「Chromeで開く」</b>を選んでください。';
+    var el = document.createElement('div'); el.className = 'inapp'; el.setAttribute('role', 'alert');
+    el.innerHTML = '<b>' + (strong ? 'このブラウザでは、ホーム画面に追加できません' : 'ご登録のあと、ホーム画面への追加はできません') + '</b>'
+      + '<p>いま、' + esc(name) + 'の中で開いています。' + (strong ? '' : 'このまま登録もできますが、') + 'ホーム画面に追加するには、' + (isIOS ? 'Safari' : 'Chrome') + 'で開き直す必要があります。<br>' + how + '<br>うまくいかないときは、下のボタンでURLをコピーして、' + (isIOS ? 'Safari' : 'Chrome') + 'に貼り付けてください。</p>'
+      + '<button type="button">このページのURLをコピー</button>';
+    el.querySelector('button').addEventListener('click', function () {
+      var b = this; copyText(location.href).then(function () { b.textContent = 'コピーしました。' + (isIOS ? 'Safari' : 'Chrome') + 'に貼り付けてください'; }).catch(function () { b.textContent = 'コピーできませんでした。アドレスを長押ししてコピーしてください'; });
+    });
+    wrap.insertBefore(el, wrap.querySelector('.card') || wrap.firstChild);
+  }
+
   /* ---------- property info (all pages) ---------- */
   var propertyP = fetch(gApi('/property')).then(function (r) { return r.json(); }).catch(function () { return null; });
   var S_CLIENT = { name: '株式会社エスコン', logo: gUrl('/assets/img/common_escon.svg') };
@@ -71,6 +96,67 @@
   var page = document.body.dataset.page;
 
   /* =================================================================
+     引き継ぎコード (claim code): lets the home-screen app (separate storage on iPhone) take over a registration
+  ================================================================= */
+  var CLAIM_KEY = 'aplika.claimCode';
+  function normCode(v) { return String(v == null ? '' : v).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8); }
+  function fmtCode(v) { v = normCode(v); return v.length > 4 ? v.slice(0, 4) + '-' + v.slice(4) : v; }
+  function copyCode(text) {
+    return new Promise(function (res, rej) {
+      try { if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text).then(res, rej); } catch (e) {}
+      try {
+        var ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+        document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, 99); var ok = document.execCommand('copy'); ta.remove();
+        return ok ? res() : rej(new Error('copy'));
+      } catch (e) { rej(e); }
+    });
+  }
+  function claimCardEl(code) {
+    var el = document.createElement('div'); el.className = 'claim-card'; el.id = 'claimCard';
+    el.innerHTML = '<div class="claim-h">引き継ぎコード</div><div class="claim-code">' + esc(fmtCode(code)) + '</div>'
+      + '<button type="button" class="btn btn-blue btn-sm claim-copy">コードをコピー</button>'
+      + '<p>ホーム画面のアプリを初めて開いたときに、このコードを入力すると、登録が引き継がれます。メモやスクリーンショットで控えておくと安心です。</p>';
+    $('.claim-copy', el).addEventListener('click', function () { copyCode(fmtCode(code)).then(function () { toast('コードをコピーしました'); }).catch(function () { toast('コピーできませんでした。コードを長押ししてコピーしてください'); }); });
+    return el;
+  }
+  /* places the card in `host` (an existing element), replacing a previous one */
+  function showClaimCard(host, code) {
+    code = normCode(code); if (!host || code.length !== 8) return;
+    var old = $('#claimCard'); if (old) old.remove();
+    host.appendChild(claimCardEl(code));
+  }
+  function claimSheet() { /* standalone app without a registration in this storage: enter the code (or register) */
+    var sh = $('#claimSheet'); if (sh) { sh.hidden = false; return; }
+    sh = document.createElement('div'); sh.id = 'claimSheet'; sh.className = 'claim-sheet';
+    sh.innerHTML = '<div class="cs-box" role="dialog" aria-modal="true"><div class="cs-t">ご登録の引き継ぎ</div>'
+      + '<p class="cs-d">Safariでご登録のときに表示された「引き継ぎコード」を入力してください。</p>'
+      + '<input type="text" id="csCode" inputmode="text" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="9" placeholder="XXXX-XXXX" aria-label="引き継ぎコード">'
+      + '<div class="cs-err" id="csErr" role="alert"></div>'
+      + '<button type="button" class="btn btn-red btn-block" id="csGo">引き継ぐ</button>'
+      + '<a class="cs-link" href="' + esc(gUrl('/register.html')) + '">コードがない・初めての方は会員登録</a>'
+      + '<button type="button" class="cs-later" id="csLater">あとで</button></div>';
+    document.body.appendChild(sh);
+    var inp = $('#csCode', sh), err = $('#csErr', sh), go = $('#csGo', sh);
+    inp.addEventListener('input', function () { inp.value = fmtCode(inp.value); err.textContent = ''; });
+    function submit() {
+      var code = normCode(inp.value);
+      if (code.length !== 8) { err.textContent = '8文字のコードをご入力ください。'; return; }
+      go.disabled = true; go.textContent = '確認中…'; err.textContent = '';
+      api('/claim', { method: 'POST', body: { code: code } }).then(function (r) {
+        lsSet(TOKEN_KEY, r.token); lsSet(CLAIM_KEY, normCode(r.claimCode) || code);
+        go.textContent = '引き継ぎました'; location.reload();
+      }).catch(function (e) {
+        go.disabled = false; go.textContent = '引き継ぐ';
+        err.textContent = e.status === 404 ? 'コードが見つかりません。もう一度ご確認ください。' : e.status === 409 ? 'この端末はすでに登録済みです。' : '通信に失敗しました。電波の良い場所でもう一度お試しください。';
+      });
+    }
+    go.addEventListener('click', submit);
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') submit(); });
+    $('#csLater', sh).addEventListener('click', function () { sh.hidden = true; });
+    setTimeout(function () { try { inp.focus(); } catch (e) {} }, 300);
+  }
+
+  /* =================================================================
      HOME
   ================================================================= */
   function initHome() {
@@ -83,8 +169,9 @@
     if (!isApp) return;
     if (!token()) {
       // installed but no token (e.g. iOS separate storage): allow re-identification via register
-      var fab0 = $('#fab'); fab0.classList.add('on'); fab0.firstChild.textContent = '会員登録をする ';
-      fab0.addEventListener('click', function () { location.href = gUrl('/register.html'); });
+      var fab0 = $('#fab'); fab0.classList.add('on'); fab0.firstChild.textContent = '引き継ぎコードを入力 ';
+      fab0.addEventListener('click', claimSheet);
+      claimSheet();
       return;
     }
 
@@ -102,7 +189,7 @@
       S.me = r[0].customer; S.contents = (r[1] && r[1].contents) || []; S.personal = (r[1] && r[1].personalFiles) || [];
       S.pushes = Array.isArray(r[2]) ? r[2] : (r[2] && r[2].pushes) || [];
       updateBadge();
-    }).catch(function (e) { if (e.status === 401) { toast('ログイン情報が無効です。再度ご登録ください。'); } });
+    }).catch(function (e) { if (e.status === 401) { toast('ログイン情報が無効です。引き継ぎコードを入力するか、再度ご登録ください。'); claimSheet(); } });
 
     // first launch: ask for notifications right away (browsers require the user's own tap, so this is a one-tap sheet)
     loadP.then(function () {
@@ -115,6 +202,7 @@
       var sh = document.createElement('div');
       sh.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center';
       sh.innerHTML = '<div style="background:#fff;color:#222;width:100%;max-width:520px;border-radius:18px 18px 0 0;padding:26px 22px calc(26px + env(safe-area-inset-bottom));text-align:center;font-family:inherit">'
+        + '<div style="display:inline-block;margin-bottom:10px;padding:4px 12px;border-radius:999px;background:#fdecec;color:#c00000;font-size:12px;font-weight:700">最後のステップ　3 / 3</div>'
         + '<div style="font-size:19px;font-weight:700;margin-bottom:8px">新着の限定情報を受け取る</div>'
         + '<p style="margin:0 0 18px;font-size:14px;line-height:1.7;color:#555">モデルルームのご案内や限定コンテンツの更新を、通知でお知らせします。次の画面で「許可」を選んでください。</p>'
         + '<button type="button" id="npOn" style="display:block;width:100%;padding:15px;border:0;border-radius:999px;background:#c00000;color:#fff;font-size:16px;font-weight:700;margin-bottom:10px">通知をオンにする</button>'
@@ -486,6 +574,7 @@
       var body = { name: data.name, email: data.email }; if (token0) body.tags = token0.split(',');
       api('/register', { method: 'POST', body: body }).then(function (r) {
         lsSet(TOKEN_KEY, r.token);
+        if (r.claimCode) { lsSet(CLAIM_KEY, normCode(r.claimCode)); var cnt = $('#cd'); showClaimCard($('#s3'), r.claimCode); var cc = $('#claimCard'); if (cc && cnt && cnt.parentNode) cnt.parentNode.parentNode.insertBefore(cc, cnt.parentNode); }
         $('#d-name').textContent = (r.customer && r.customer.name) || data.name;
         show(2);
         var bar = $('#bar'); requestAnimationFrame(function () { requestAnimationFrame(function () { bar.style.width = '100%'; }); });
@@ -573,12 +662,20 @@
     if (isApp) { $('#doneCard').hidden = false; $('#steps').hidden = true; $('#tabs').hidden = true; }
     draw();
     if (token()) api('/me').then(function (r) { $('#who').textContent = r.customer.name + '様、'; }).catch(function () {});
+    /* 引き継ぎコード card: right below the headline; customers registered before codes existed get one minted on demand */
+    (function () {
+      var anchor = $('#tabs'); if (!anchor || !token() || isApp) return;
+      var put = function (c) { c = normCode(c); if (c.length !== 8) return; var tmp = document.createElement('div'); showClaimCard(tmp, c); var el = tmp.firstChild; if (el && anchor.parentNode) anchor.parentNode.insertBefore(el, anchor); };
+      var have = normCode(lsGet(CLAIM_KEY));
+      if (have.length === 8) put(have);
+      else api('/claim-code', { method: 'POST', body: {} }).then(function (r) { if (r && r.claimCode) { lsSet(CLAIM_KEY, normCode(r.claimCode)); put(r.claimCode); } }).catch(function () {});
+    })();
   }
 
   function boot() {
     if (page === 'home') initHome();
-    else if (page === 'register') initRegister();
-    else if (page === 'install') initInstall();
+    else if (page === 'register') { showInAppBanner(false); initRegister(); }
+    else if (page === 'install') { showInAppBanner(true); initInstall(); }
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();

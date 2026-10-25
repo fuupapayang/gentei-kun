@@ -258,3 +258,38 @@ footer.site-foot .prov,.foot-light .prov{font-size:11px;letter-spacing:.18em;mar
 .step-art .hl{animation:hlPulse 1.4s ease-in-out infinite}
 @keyframes hlPulse{0%,100%{stroke-opacity:1}50%{stroke-opacity:.25}}
 @media (prefers-reduced-motion:reduce){.step-art .hl{animation:none}}
+
+/* flow bar: 1 登録 -> 2 ホーム画面に追加 -> 3 通知オン (shown in the dark page head) */
+.flow{display:flex;justify-content:center;gap:6px;list-style:none;margin:16px auto 0;padding:0;max-width:400px}
+.flow li{flex:1 1 0;display:flex;align-items:center;justify-content:center;gap:5px;padding:7px 6px;border-radius:999px;background:rgba(255,255,255,.12);color:rgba(255,255,255,.72);font-size:10.5px;line-height:1.25;letter-spacing:.02em;min-width:0}
+.flow li b{flex:none;width:17px;height:17px;border-radius:50%;background:rgba(255,255,255,.28);display:grid;place-items:center;font-size:10px;font-weight:700}
+.flow li span{text-align:left}
+.flow[data-now="1"] li:nth-child(1),.flow[data-now="2"] li:nth-child(2),.flow[data-now="3"] li:nth-child(3){background:var(--red);color:#fff;font-weight:700}
+.flow[data-now="1"] li:nth-child(1) b,.flow[data-now="2"] li:nth-child(2) b,.flow[data-now="3"] li:nth-child(3) b{background:#fff;color:var(--red)}
+.flow[data-now="2"] li:nth-child(1) b,.flow[data-now="3"] li:nth-child(-n+2) b{background:#fff;color:var(--blue)}
+.flow[data-now="2"] li:nth-child(1) b::before,.flow[data-now="3"] li:nth-child(-n+2) b::before{content:"✓"}
+.flow[data-now="2"] li:nth-child(1) b,.flow[data-now="3"] li:nth-child(-n+2) b{font-size:0}
+.flow[data-now="2"] li:nth-child(1) b::before,.flow[data-now="3"] li:nth-child(-n+2) b::before{font-size:10px}
+/* in-app browser warning */
+.inapp{margin:0 0 16px;padding:14px 16px;border-radius:14px;background:#fff4e5;border:1.5px solid #f2b25c;color:#5a3a00;font-size:13px;line-height:1.7}
+.inapp b{display:block;font-size:14px;color:#a35a00;margin-bottom:4px}
+.inapp p{margin:0 0 10px}
+.inapp button{display:block;width:100%;padding:11px;border:0;border-radius:999px;background:#c77700;color:#fff;font-size:14px;font-weight:700}
+
+/* the flow bar makes the dark header taller: extend the dark area behind it */
+body[data-page="register"] .page,body[data-page="install"] .page{background:linear-gradient(180deg,var(--blue-d) 0,var(--blue-d) 330px,var(--bg) 330px)}
+
+/* 引き継ぎコード (claim code) */
+.claim-card{background:#fff;border:2px solid var(--blue);border-radius:16px;padding:18px 16px;margin:18px 0;text-align:center;box-shadow:0 8px 24px rgba(11,61,145,.12)}
+.claim-card .claim-h{font-family:var(--serif);font-weight:700;font-size:16px;letter-spacing:.14em;color:var(--blue)}
+.claim-card .claim-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:34px;font-weight:700;letter-spacing:.14em;color:var(--ink);margin:8px 0 12px;user-select:all;-webkit-user-select:all}
+.claim-card p{margin:12px 0 0;font-size:12.5px;line-height:1.7;color:var(--mute);text-align:left}
+.claim-sheet{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center}
+.claim-sheet .cs-box{background:#fff;color:var(--ink);width:100%;max-width:520px;border-radius:18px 18px 0 0;padding:26px 22px calc(26px + env(safe-area-inset-bottom,0px));text-align:center}
+.claim-sheet .cs-t{font-size:19px;font-weight:700;margin-bottom:8px}
+.claim-sheet .cs-d{margin:0 0 16px;font-size:14px;line-height:1.7;color:#555}
+.claim-sheet input{display:block;width:100%;text-align:center;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:26px;letter-spacing:.14em;padding:12px;border:1.5px solid var(--line);border-radius:12px;margin-bottom:8px;text-transform:uppercase}
+.claim-sheet input:focus{outline:0;border-color:var(--blue)}
+.claim-sheet .cs-err{min-height:20px;margin:0 0 8px;font-size:13px;color:var(--red)}
+.claim-sheet .cs-link{display:block;margin-top:14px;font-size:14px}
+.claim-sheet .cs-later{display:block;width:100%;margin-top:6px;padding:10px;border:0;background:none;color:#888;font-size:13px}

@@ -340,19 +340,29 @@ async function vCustomers(v) {
   const draw = () => {
     const ls = list.filter(c => !q || (c.name + c.email + (c.assignee || '') + (c.tags || []).join()).toLowerCase().includes(q));
     v.querySelector('tbody').innerHTML = ls.map(c => { const r = relTime(c.lastSeenAt);
-      return `<tr><td><b>${esc(c.name)}</b> 様<div class="note">${esc(c.email)}</div><div class="note">${c.installed ? '📱 追加済み' : '未追加'} ${esc({ ios: 'iOS', android: 'Android', pc: 'PC' }[c.platform] || '')}</div></td>
+      return `<tr><td><b>${esc(c.name)}</b> 様<div class="note">${esc(c.email)}</div><div class="note">${c.installed ? '📱 追加済み' : '未追加'} ${esc({ ios: 'iOS', android: 'Android', pc: 'PC' }[c.platform] || '')}${c.deviceCount ? ` ・ 端末 ${c.deviceCount}台` : ''}${c.hasPush ? ' ・ 🔔通知可' : ''}</div></td>
       <td><span class="badge ${r.recent ? 'red' : 'gray'}">${r.text}</span></td>
       <td>${esc(c.assignee) || '<span class="note">未設定</span>'}</td>
       <td>${c.status ? `<span class="badge blue">${esc(c.status)}</span> ` : ''}${tagHtml(c.tags)}</td>
       <td><a class="btn sm blue" href="#/customers/${esc(c.id)}">詳しく見る</a> <button class="ibtn" data-cd="${esc(c.id)}" title="削除">🗑️</button></td></tr>`; }).join('') || '<tr><td colspan="5" class="empty">該当する顧客がいません</td></tr>';
   };
-  v.innerHTML = `<h2 class="title">顧客管理 <span class="sp"></span><input type="text" id="q" placeholder="名前・メール・担当者で検索" style="width:260px;margin:0"></h2>
+  v.innerHTML = `<h2 class="title">顧客管理 <span class="sp"></span>${FB ? '<button class="btn" id="mergeDup" title="メールアドレスが同じ登録を1人にまとめます">同じメールの重複を統合</button> ' : ''}<input type="text" id="q" placeholder="名前・メール・担当者で検索" style="width:260px;margin:0"></h2>
   <div class="tblwrap"><table class="tbl"><thead><tr><th>お客様</th><th>最終アクセス</th><th>担当者</th><th>ステータス / タグ</th><th></th></tr></thead><tbody></tbody></table></div>`;
   v.querySelector('#q').oninput = e => { q = e.target.value.toLowerCase(); draw(); };
+  const md = v.querySelector('#mergeDup');
+  if (md) md.onclick = guard(async () => {
+    const groups = {};
+    list.forEach(c => { const k = String(c.email || '').trim().toLowerCase(); if (k) (groups[k] = groups[k] || []).push(c); });
+    const dups = Object.values(groups).filter(g => g.length > 1), n = dups.reduce((t, g) => t + g.length - 1, 0);
+    if (!dups.length) { toast('統合できる重複はありません'); return; }
+    if (!await confirmBox(`同じメールアドレスの登録が${dups.length}組(合計${n}件の重複)あります。\n最も古い登録を本人として1人にまとめます。よろしいですか?\n(データは削除されません。タグは合算されます)`)) return;
+    const r = await api('/customers/merge-duplicates', { method: 'POST', body: {} });
+    toast(`${r.merged}件を統合しました`); route();
+  });
   v.querySelector('tbody').onclick = guard(async e => {
     const b = e.target.closest('[data-cd]'); if (!b) return;
     const c = list.find(x => x.id === b.dataset.cd); if (!c) return;
-    if (!await confirmBox(`「${c.name}」様を削除しますか?\n専用資料・閲覧履歴・コンバージョンも一緒に削除され、元に戻せません。`)) return;
+    if (!await confirmBox(`「${c.name}」様を削除しますか?\n${c.deviceCount > 1 ? `統合されている${c.deviceCount}台分の端末・` : ''}専用資料・閲覧履歴・コンバージョンも一緒に削除され、元に戻せません。`)) return;
     await api('/customers/' + c.id, { method: 'DELETE' }); toast('顧客を削除しました'); route();
   });
   draw();
@@ -370,7 +380,7 @@ async function vCustomerDetail(v, id) {
    <div class="card"><h3>顧客情報</h3><dl class="kv">
      <dt>氏名</dt><dd>${esc(c.name)}</dd><dt>メール</dt><dd>${esc(c.email)}</dd>
      <dt>最終アクセス</dt><dd><span class="badge ${r.recent ? 'red' : 'gray'}">${r.text}</span> <span class="note">${fmt(c.lastSeenAt)}</span></dd>
-     <dt>端末</dt><dd>${c.installed ? '📱 ホーム画面追加済み' : '未追加'} ${esc(c.platform || '')}</dd>
+     <dt>端末</dt><dd>${c.installed ? '📱 ホーム画面追加済み' : '未追加'} ${esc(c.platform || '')}${c.deviceCount > 1 ? ` <span class="badge gray">端末 ${c.deviceCount}台を統合</span>` : ''}</dd>
      <dt>ステータス</dt><dd><input type="text" id="cs" value="${esc(c.status)}" placeholder="例: 検討中" style="margin:0"></dd>
      <dt>担当者</dt><dd><input type="text" id="ca" value="${esc(c.assignee)}" placeholder="例: 山田" style="margin:0"></dd>
      <dt>タグ</dt><dd><div class="chips" id="cc" style="margin:0"></div></dd>
@@ -518,7 +528,7 @@ function tagModal(t) {
 /* ---------- conversions ---------- */
 async function vConversions(v) {
   const [list, cs] = await Promise.all([api('/conversions'), api('/customers')]);
-  const nm = Object.fromEntries(cs.map(c => [c.id, c.name]));
+  const nm = {}; cs.forEach(c => { nm[c.id] = c.name; (c.memberIds || []).forEach(m => { nm[m] = c.name; }); });
   list.sort((a, b) => (b.at || '').localeCompare(a.at || ''));
   const cnt = {}; list.forEach(x => cnt[x.kind] = (cnt[x.kind] || 0) + 1);
   v.innerHTML = `<h2 class="title">コンバージョン管理 <span class="sp"></span><button class="btn green" id="new">＋ 追加</button></h2>

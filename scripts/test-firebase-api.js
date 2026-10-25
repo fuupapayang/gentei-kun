@@ -28,7 +28,12 @@ function checkRead(db, cname, id, q, data) { // q = list of {field,op,v} for lis
   const has = (f, v) => q && q.some((c) => c.field === f && c.op === '==' && c.v === v);
   if (cname === 'contents') { if (id ? data && data.active === true : has('active', true)) return; denied('contents list needs active==true'); }
   if (cname === 'pushes') { if (id ? data && data.status === 'sent' : has('status', 'sent')) return; denied('pushes list needs status==sent'); }
-  if (cname === 'personalFiles') { if (id ? data && data.customerId === u.uid : has('customerId', u.uid)) return; denied('personalFiles needs customerId==uid'); }
+  if (cname === 'personalFiles') { // own files OR the primary's (customers/{uid}.primaryId)
+    const prim = (col('customers').get(u.uid) || {}).primaryId || '-';
+    if (id ? data && (data.customerId === u.uid || data.customerId === prim) : (has('customerId', u.uid) || has('customerId', prim))) return;
+    denied('personalFiles needs customerId==uid|primaryId');
+  }
+  if (cname === 'claimCodes') { if (id) return; denied('claimCodes can not be listed'); } // single get only
   if (cname === 'customers' && id === u.uid) return;
   denied('read ' + cname);
 }
@@ -41,9 +46,19 @@ function checkWrite(db, op, cname, id, data, existing) {
     if (k.every((x) => ['customerId', 'type', 'target', 'at'].includes(x)) && data.customerId === u.uid && EVT.includes(data.type) && typeof data.target === 'string') return;
     denied('event shape');
   }
+  if (cname === 'claimCodes' && op === 'create') {
+    const okK = ['uid', 'name', 'email', 'tags', 'createdAt'];
+    if (/^[A-Z0-9]{8}$/.test(id) && Object.keys(data).every((x) => okK.includes(x)) && ['uid', 'name', 'email', 'tags'].every((x) => x in data) && data.uid === u.uid && Array.isArray(data.tags) && data.tags.length <= 10) return;
+    denied('claimCodes create shape');
+  }
   if (cname === 'customers' && id === u.uid) {
     if (op === 'create') {
-      const okKeys = ['name', 'email', 'tags', 'status', 'assignee', 'memo', 'createdAt', 'lastSeenAt', 'pushSub', 'installed', 'platform'];
+      const okKeys = ['name', 'email', 'tags', 'status', 'assignee', 'memo', 'createdAt', 'lastSeenAt', 'pushSub', 'installed', 'platform', 'primaryId', 'claimCode'];
+      const hasP = 'primaryId' in data, hasC = 'claimCode' in data;
+      if (hasP || hasC) { // only when the claim code really belongs to that primary
+        const cc = hasC && typeof data.claimCode === 'string' && /^[A-Z0-9]{8}$/.test(data.claimCode) ? col('claimCodes').get(data.claimCode) : null;
+        if (!(hasP && hasC && cc && cc.uid === data.primaryId)) denied('customer create: primaryId must match claimCode owner');
+      }
       if (Object.keys(data).every((x) => okKeys.includes(x)) && data.status === '新規' && data.assignee === '' && data.memo === '' && Array.isArray(data.tags) && data.tags.length <= 10 && data.pushSub === null && data.installed === false && data.platform === 'pc') return;
       denied('customer create shape');
     }
@@ -62,8 +77,9 @@ function mkAuth() {
   return a;
 }
 const accounts = { [ADMIN]: 'pw-correct' };
+const apps = {};
 const sdk = {
-  app: { initializeApp: (cfg, name) => ({ cfg, name, auth: mkAuth() }) },
+  app: { initializeApp: (cfg, name) => (apps[name] = { cfg, name, auth: mkAuth() }) },
   auth: {
     getAuth: (app) => app.auth,
     signInAnonymously: async (a) => { a.currentUser = { uid: 'anon' + ++seq, anonymous: true, email: null }; return { user: a.currentUser }; },
@@ -106,6 +122,10 @@ sdk.fs.writeBatch = (db) => { const ops = []; return {
 // ---- load shim exactly like the browser would ----
 globalThis.GENTEI_CONFIG = { apiBase: 'firebase', firebase: { apiKey: 'k', projectId: 'demo', appId: 'a' }, adminEmails: [ADMIN] };
 globalThis.__GENTEI_FIREBASE_SDK__ = sdk;
+// the shim reads aplika.claimCode from localStorage when it exists (browser only): fake one
+const lsMap = new Map();
+globalThis.document = {};
+Object.defineProperty(globalThis, 'localStorage', { configurable: true, writable: true, value: { getItem: (k) => (lsMap.has(k) ? lsMap.get(k) : null), setItem: (k, v) => lsMap.set(k, String(v)), removeItem: (k) => lsMap.delete(k) } });
 vm.runInThisContext(fs.readFileSync(path.join(ROOT, 'public/config.js'), 'utf8'), { filename: 'config.js' });
 vm.runInThisContext(fs.readFileSync(path.join(ROOT, 'public/firebase-api.js'), 'utf8'), { filename: 'firebase-api.js' });
 
@@ -303,6 +323,143 @@ const eq = (a, b, msg) => { assert.deepStrictEqual(a, b, msg); n++; };
   eq(del.j.ok, true); ok(del.j.removed.events === evBefore && del.j.removed.files >= 1, 'cascade counts');
   eq((await call('GET', `/admin/customers/${uid}`)).status, 404);
   eq((await call('DELETE', `/admin/customers/${uid}`)).status, 404);
+
+  // =================== claim code + duplicate merging ===================
+  const newDevice = () => { apps.customer.auth.currentUser = null; lsMap.clear(); }; // fresh Safari tab / home-screen app storage
+  const loginAdmin = async () => eq((await call('POST', '/admin/login', { email: 'BOSS@example.com', password: 'pw-correct' })).status, 200);
+  const CODE_RE = /^[ABCDEFGHJKMNPQRSTUVWXYZ2-9]{8}$/;
+  const setCreated = (id, t) => { col('customers').get(id).createdAt = iso(t); };
+  await loginAdmin();
+  eq((await call('GET', '/admin/customers')).j.length, 0, 'clean slate');
+
+  // register returns a claim code (and stores {uid,name,email,tags,createdAt} under it)
+  newDevice();
+  const rA = await call('POST', '/register', { name: 'Alice', email: 'alice@x.com', tags: ['来場予約'] });
+  eq(rA.status, 200);
+  ok(typeof rA.j.claimCode === 'string' && CODE_RE.test(rA.j.claimCode), 'claimCode 8 chars, unambiguous alphabet: ' + rA.j.claimCode);
+  const A = rA.j.token, codeA = rA.j.claimCode;
+  const cdoc = col('claimCodes').get(codeA);
+  ok(cdoc && cdoc.uid === A && cdoc.name === 'Alice' && cdoc.email === 'alice@x.com' && cdoc.tags.length === 1 && cdoc.createdAt, 'claimCodes doc shape');
+  lsMap.set('aplika.claimCode', codeA);
+  eq((await call('POST', '/register', { name: 'Alice', email: 'alice@x.com' })).j.claimCode, codeA, 're-register on same device keeps the code');
+  eq(col('claimCodes').size, 1);
+  const alphaBad = /[01OIL]/; ok(!alphaBad.test(codeA), 'no ambiguous characters');
+  setCreated(A, now - 9 * DAY);
+  eq((await call('POST', `/admin/customers/${A}/files`, { title: 'Aの資料', url: 'https://x/a.pdf' })).status, 201);
+
+  // claim on another "device"
+  newDevice();
+  eq((await call('POST', '/claim', { code: 'ZZZZZZZZ' })).status, 404, 'unknown code');
+  eq((await call('POST', '/claim', { code: 'abc' })).status, 404, 'malformed code');
+  eq((await call('POST', '/claim', {})).status, 404, 'missing code');
+  eq((await call('GET', '/me')).status, 401, 'failed claim does not create a customer');
+  const fmtCode = codeA.slice(0, 4).toLowerCase() + '-' + codeA.slice(4).toLowerCase();
+  const clB = await call('POST', '/claim', { code: fmtCode });
+  eq(clB.status, 200);
+  const B = clB.j.token;
+  ok(B !== A && clB.j.customer.primaryId === A && clB.j.customer.name === 'Alice' && clB.j.customer.status === '新規', 'claim shape');
+  const bdoc = col('customers').get(B);
+  ok(bdoc.primaryId === A && bdoc.claimCode === codeA && bdoc.email === 'alice@x.com' && bdoc.tags[0] === '来場予約', 'alias doc fields copied');
+  eq((await call('GET', '/me')).j.customer.name, 'Alice', 'app behaves as the customer');
+  eq((await call('GET', '/contents')).j.personalFiles.map((f) => f.title), ['Aの資料'], 'alias sees primary personal files');
+  eq((await call('POST', '/claim', { code: codeA })).status, 200, 'claim again is idempotent');
+  for (const [t, tg] of [['login', 'ios'], ['content', 'ct1']]) eq((await call('POST', '/event', { type: t, target: tg })).j, { ok: true });
+  eq((await call('POST', '/push/subscribe', { subscription: { endpoint: 'https://push/b', keys: { p256dh: 'a', auth: 'b' } }, platform: 'ios' })).j, { ok: true });
+  // a third device cannot see anyone's files unless claimed; other uid's primaryId attempts are rejected by the rules
+  newDevice();
+  const rX = await call('POST', '/register', { name: 'Mallory', email: 'm@x.com' }); eq(rX.status, 200);
+  eq((await call('GET', '/contents')).j.personalFiles, [], 'unrelated customer sees no files');
+  const mdb = sdk.fs.getFirestore({ auth: { currentUser: { uid: rX.j.token, anonymous: true } } });
+  const mkAlias = (primaryId, claimCode) => sdk.fs.setDoc(sdk.fs.doc(mdb, 'customers', rX.j.token), { name: 'M', email: '', tags: [], status: '新規', assignee: '', memo: '', createdAt: iso(now), lastSeenAt: iso(now), pushSub: null, installed: false, platform: 'pc', primaryId, claimCode });
+  col('customers').delete(rX.j.token);
+  for (const [pid, cc] of [[A, 'ZZZZZZZZ'], [B, codeA], [A, undefined], ['someone', codeA]]) {
+    let threw = false; try { await mkAlias(pid, cc); } catch (e) { threw = e.code === 'permission-denied'; }
+    ok(threw, 'forged alias rejected ' + pid + '/' + cc);
+  }
+  for (const f of [() => sdk.fs.getDocs(sdk.fs.collection(mdb, 'claimCodes')), () => sdk.fs.updateDoc(sdk.fs.doc(mdb, 'claimCodes', codeA), { uid: rX.j.token }), () => sdk.fs.deleteDoc(sdk.fs.doc(mdb, 'claimCodes', codeA)),
+    () => sdk.fs.setDoc(sdk.fs.doc(mdb, 'claimCodes', codeA), { uid: rX.j.token, name: 'x', email: '', tags: [] }),
+    () => sdk.fs.setDoc(sdk.fs.doc(mdb, 'claimCodes', 'QQQQQQQQ'), { uid: A, name: 'x', email: '', tags: [] }),
+    () => sdk.fs.setDoc(sdk.fs.doc(mdb, 'claimCodes', 'QQQQQQQQ'), { uid: rX.j.token, name: 'x', email: '', tags: [], evil: 1 })]) {
+    let threw = false; try { await f(); } catch (e) { threw = e.code === 'permission-denied'; }
+    ok(threw, 'claimCodes list/update/delete/forged create rejected');
+  }
+  eq((await sdk.fs.getDoc(sdk.fs.doc(mdb, 'claimCodes', codeA))).exists(), true, 'single get allowed');
+  // mallory is now unregistered again -> clean the rest of her traces so the counts below stay simple
+  col('claimCodes').forEach((v, k) => { if (v.uid === rX.j.token) col('claimCodes').delete(k); });
+  col('events').forEach((v, k) => { if (v.customerId === rX.j.token) col('events').delete(k); });
+
+  // ---- admin: grouping ----
+  await loginAdmin();
+  let lst = (await call('GET', '/admin/customers')).j;
+  eq(lst.map((c) => c.id), [A], 'alias hidden from list');
+  const evA = col('events'); const nEv = (id) => [...evA.values()].filter((e) => e.customerId === id).length;
+  ok(lst[0].deviceCount === 2 && lst[0].hasPush === true && lst[0].eventCount === nEv(A) + nEv(B), 'row: devices, hasPush any, events summed');
+  eq(col('customers').get(A).pushSub, null, 'primary itself has no push sub');
+  ok(lst[0].lastSeenAt >= col('customers').get(A).lastSeenAt && lst[0].lastSeenAt >= col('customers').get(B).lastSeenAt, 'latest lastSeenAt');
+  eq((await call('GET', '/admin/dashboard')).j.customers, 1, 'dashboard counts primaries');
+  const dA = (await call('GET', `/admin/customers/${B}`)).j; // asking by alias id resolves to the primary
+  ok(dA.id === A && dA.deviceCount === 2 && dA.memberIds.includes(B) && dA.installed === true, 'detail by alias id = primary');
+  const evAll = (await call('GET', `/admin/customers/${A}/events`)).j;
+  eq(evAll.length, nEv(A) + nEv(B), 'events of all devices merged'); ok(evAll.some((e) => e.customerId === B) && evAll[0].at >= evAll[evAll.length - 1].at, 'merged events newest first');
+  eq((await call('GET', `/admin/customers/${A}/summary`)).j.stats.events, nEv(A) + nEv(B), 'summary uses all devices');
+  const cvB = await call('POST', '/admin/conversions', { customerId: B, kind: 'document' });
+  eq(cvB.j.customerId, A, 'conversion on an alias is stored on the primary');
+  eq((await call('GET', `/admin/customers/${A}/summary`)).j.interests.points.some((x) => x.includes('資料請求')), true, 'conversions merged into summary');
+
+  // mirror PUT (applied through the alias id too)
+  const pu = await call('PUT', `/admin/customers/${B}`, { tags: ['資金計画'], status: '商談中', assignee: '佐藤', memo: 'm1' });
+  eq(pu.status, 200); eq(pu.j.id, A);
+  for (const id of [A, B]) { const d = col('customers').get(id); ok(d.status === '商談中' && d.assignee === '佐藤' && d.memo === 'm1' && JSON.stringify(d.tags) === '["資金計画"]', 'mirrored to ' + id); }
+  eq(col('claimCodes').get(codeA).tags, ['資金計画'], 'claim code tags follow the customer');
+  // alias device gets targeted content from mirrored tags
+  apps.customer.auth.currentUser = { uid: B, anonymous: true, email: null };
+  eq((await call('GET', '/contents')).j.contents.map((c) => c.id), ['ct2', 'ct1'], 'alias tags drive content');
+  eq((await call('GET', '/pushes')).j.map((p) => p.id).includes('ps2'), true, 'alias tags drive pushes');
+
+  // merge by identical e-mail (case-insensitive); oldest = primary
+  newDevice(); const rC = await call('POST', '/register', { name: 'Alice 2', email: 'ALICE@x.com', tags: ['VIP'] });
+  newDevice(); const rD = await call('POST', '/register', { name: 'Bob', email: 'bob@x.com' });
+  newDevice(); const rE = await call('POST', '/register', { name: 'Bobby', email: 'Bob@X.com' });
+  newDevice(); const rF = await call('POST', '/register', { name: 'Solo', email: 'solo@x.com' });
+  const [C, D, E, F] = [rC, rD, rE, rF].map((x) => x.j.token);
+  setCreated(C, now - 5 * DAY); setCreated(D, now - 4 * DAY); setCreated(E, now - 3 * DAY); setCreated(F, now - 2 * DAY);
+  await loginAdmin();
+  eq((await call('GET', '/admin/customers')).j.length, 5, 'five primaries before merging');
+  const mg = await call('POST', '/admin/customers/merge-duplicates');
+  eq(mg.status, 200); eq(mg.j.merged, 2); eq(mg.j.groups, 2);
+  eq(col('customers').get(C).primaryId, A, 'newer duplicate -> oldest primary'); eq(col('customers').get(E).primaryId, D);
+  ok(!col('customers').get(A).primaryId && !col('customers').get(D).primaryId && !col('customers').get(F).primaryId, 'primaries untouched');
+  eq(col('customers').get(B).primaryId, A, 'existing alias still points at the primary');
+  lst = (await call('GET', '/admin/customers')).j;
+  eq(lst.map((c) => c.id).sort(), [A, D, F].sort()); eq(lst.find((c) => c.id === A).deviceCount, 3); eq(lst.find((c) => c.id === D).deviceCount, 2);
+  for (const id of [A, B, C]) eq(col('customers').get(id).tags.slice().sort(), ['VIP', '資金計画'], 'merged tag union mirrored to ' + id);
+  eq(col('claimCodes').get(rC.j.claimCode).uid, A, 'merged customer claim code now belongs to the primary');
+  eq((await call('POST', '/admin/customers/merge-duplicates')).j, { ok: true, merged: 0, groups: 0 }, 'idempotent');
+  eq((await call('GET', '/admin/dashboard')).j.customers, 3);
+  // a device claiming the merged customer's old code ends up directly under the primary
+  newDevice(); const clG = await call('POST', '/claim', { code: rC.j.claimCode });
+  eq(clG.j.customer.primaryId, A, 'claim after merge points at the primary');
+  await loginAdmin();
+
+  // delete the whole group
+  const G2 = clG.j.token;
+  const before = { ev: [...col('events').values()].filter((e) => [A, B, C, G2].includes(e.customerId)).length };
+  const dl = await call('DELETE', `/admin/customers/${C}`); // via an alias id
+  eq(dl.status, 200);
+  ok(dl.j.removed.devices === 4 && dl.j.removed.events === before.ev && dl.j.removed.files >= 1 && dl.j.removed.conversions === 1 && dl.j.removed.claimCodes >= 2, 'group delete counts ' + JSON.stringify(dl.j.removed));
+  for (const id of [A, B, C, G2]) eq(col('customers').has(id), false, 'gone ' + id);
+  ok([...col('events').values()].every((e) => ![A, B, C, G2].includes(e.customerId)) && [...col('personalFiles').values()].every((f) => ![A, B, C].includes(f.customerId)) && [...col('claimCodes').values()].every((c) => ![A, B, C, G2].includes(c.uid)), 'events/files/claims removed');
+  eq(col('claimCodes').has(codeA), false);
+  eq((await call('GET', '/admin/customers')).j.map((c) => c.id).sort(), [D, F].sort(), 'other groups untouched');
+  eq((await call('POST', '/claim', { code: codeA })).status, 404, 'deleted customer code no longer valid');
+
+  // customers registered before claim codes existed can mint one on demand (install page)
+  apps.customer.auth.currentUser = { uid: F, anonymous: true, email: null }; lsMap.clear();
+  col('claimCodes').forEach((v, k) => { if (v.uid === F) col('claimCodes').delete(k); });
+  const lc = await call('POST', '/claim-code', {});
+  ok(lc.status === 200 && CODE_RE.test(lc.j.claimCode) && col('claimCodes').get(lc.j.claimCode).uid === F, 'legacy customer gets a claim code');
+  lsMap.set('aplika.claimCode', lc.j.claimCode);
+  eq((await call('POST', '/claim-code', {})).j.claimCode, lc.j.claimCode, 'claim-code is stable while remembered');
 
   console.log(`OK  firebase-api shim: ${n} assertions passed`);
 })().catch((e) => { console.error('FAIL', e); process.exit(1); });
