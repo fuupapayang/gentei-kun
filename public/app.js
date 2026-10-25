@@ -505,33 +505,61 @@
     var isSafari = isIOS && !/CriOS|FxiOS|EdgiOS|OPiOS|GSA\//.test(ua);
     var shareIco = '<span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#0b3d91" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 7l4-4 4 4M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1"/></svg></span>';
     var addIco = '<span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#0b3d91" stroke-width="2" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M12 8v8M8 12h8"/></svg></span>';
+    /* ---- step illustrations: simplified screens with the thing to tap circled in red ---- */
+    var ICON = gUrl('/icons/icon-192.png');
+    function art(inner) { return '<svg class="step-art" viewBox="0 0 320 150" role="img" aria-hidden="true">' + inner + '</svg>'; }
+    function hl(x, y, w, h, r) { return '<rect class="hl" x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="' + (r || 10) + '" fill="rgba(192,0,0,.08)" stroke="#c00000" stroke-width="3"/>'; }
+    function tx(x, y, t, o) { o = o || {}; return '<text x="' + x + '" y="' + y + '" font-size="' + (o.s || 12) + '" fill="' + (o.c || '#333') + '" text-anchor="' + (o.a || 'start') + '" font-weight="' + (o.w || 400) + '" font-family="-apple-system,Hiragino Sans,sans-serif">' + t + '</text>'; }
+    function shareSvg(x, y, c) { return '<g transform="translate(' + x + ',' + y + ')" fill="none" stroke="' + (c || '#0b3d91') + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M0-9v14M-5-5l5-5 5 5M-8 0h-2v12h20V0h-2"/></g>'; }
+    function homeGrid(label) {
+      var cols = ['#9db4d9', '#c9a4a4', '#a9c8b0', '#d6c58f', '#b3a8d1', '#8fb8c4'], o = '<rect x="0" y="0" width="320" height="150" fill="#cfd9ea"/>';
+      for (var i = 0; i < 4; i++) { o += '<rect x="' + (30 + i * 68) + '" y="16" width="46" height="46" rx="11" fill="' + cols[i] + '"/>'; }
+      for (var j = 0; j < 2; j++) { o += '<rect x="' + (30 + j * 68) + '" y="84" width="46" height="46" rx="11" fill="' + cols[4 + j] + '"/>'; }
+      o += '<image href="' + ICON + '" x="166" y="84" width="46" height="46"/>' + hl(160, 78, 58, 74, 14) + tx(189, 146, label, { s: 10, a: 'middle', w: 700, c: '#c00000' });
+      return art(o);
+    }
+    var ART = {
+      ios1: art('<rect width="320" height="150" fill="#eef1f8"/>' + tx(160, 40, 'いま開いているページ', { a: 'middle', c: '#8a94ab' }) + '<rect x="0" y="92" width="320" height="58" fill="#fff"/><path d="M0 92h320" stroke="#d6dbe8"/>' + tx(40, 128, '‹', { s: 26, a: 'middle', c: '#9aa3b8' }) + tx(100, 128, '›', { s: 26, a: 'middle', c: '#9aa3b8' }) + shareSvg(160, 120) + '<rect x="210" y="112" width="18" height="18" rx="3" fill="none" stroke="#9aa3b8" stroke-width="2"/><rect x="262" y="112" width="18" height="18" rx="3" fill="none" stroke="#9aa3b8" stroke-width="2"/>' + hl(138, 98, 44, 46, 12) + tx(160, 82, '↓ 画面の一番下', { a: 'middle', w: 700, c: '#c00000' })),
+      ios2: art('<rect width="320" height="150" fill="#cfd5e3"/><rect x="30" y="14" width="260" height="150" rx="16" fill="#f7f8fb"/>' + tx(46, 38, 'コピー', { s: 13 }) + '<path d="M46 48h228" stroke="#e1e5ef"/>' + tx(46, 72, 'ブックマークを追加', { s: 13, c: '#999' }) + '<path d="M46 82h228" stroke="#e1e5ef"/>' + '<rect x="44" y="92" width="232" height="32" rx="8" fill="#fff"/>' + tx(58, 113, 'ホーム画面に追加', { s: 14, w: 700 }) + '<g transform="translate(252,108)" fill="none" stroke="#0b3d91" stroke-width="2" stroke-linecap="round"><rect x="-9" y="-9" width="18" height="18" rx="4"/><path d="M0-4v8M-4 0h8"/></g>' + hl(40, 89, 240, 38, 10) + tx(160, 144, '↑ 上にスクロールして探します', { s: 10, a: 'middle', c: '#c00000', w: 700 })),
+      ios3: art('<rect width="320" height="150" fill="#cfd5e3"/><rect x="20" y="10" width="280" height="150" rx="16" fill="#f7f8fb"/>' + tx(40, 36, 'キャンセル', { s: 12, c: '#0b3d91' }) + tx(160, 36, 'ホーム画面に追加', { s: 12, a: 'middle', w: 700 }) + tx(270, 36, '追加', { s: 14, a: 'middle', w: 700, c: '#0b3d91' }) + hl(244, 18, 54, 26, 8) + '<path d="M20 50h280" stroke="#e1e5ef"/><image href="' + ICON + '" x="40" y="62" width="50" height="50"/><rect x="104" y="66" width="170" height="40" rx="8" fill="#fff" stroke="#e1e5ef"/>' + tx(118, 92, '限定くん', { s: 14, w: 700 }) + tx(160, 134, '名前はそのままでOK', { s: 10, a: 'middle', c: '#8a94ab' })),
+      ios4: homeGrid('限定くん'),
+      and1: art('<rect width="320" height="150" fill="#eef1f8"/><rect x="0" y="0" width="320" height="44" fill="#fff"/><rect x="14" y="8" width="230" height="28" rx="14" fill="#eef1f8"/>' + tx(30, 27, 'fuupapayang.github.io', { s: 11, c: '#555' }) + '<g fill="#555"><circle cx="290" cy="14" r="3"/><circle cx="290" cy="22" r="3"/><circle cx="290" cy="30" r="3"/></g>' + hl(270, 4, 40, 36, 18) + tx(160, 100, 'ここ（画面の右上）をタップ', { a: 'middle', w: 700, c: '#c00000', s: 13 }) + tx(160, 124, '「ワンタップで追加」が出ていれば、それを押すだけでOK', { a: 'middle', s: 10, c: '#8a94ab' })),
+      and2: art('<rect width="320" height="150" fill="#cfd5e3"/><rect x="110" y="6" width="200" height="140" rx="12" fill="#fff"/>' + tx(124, 30, '新しいタブ', { s: 12 }) + tx(124, 56, '履歴', { s: 12, c: '#999' }) + '<rect x="116" y="68" width="188" height="30" rx="6" fill="#fff"/>' + tx(124, 88, 'アプリをインストール', { s: 13, w: 700 }) + hl(114, 66, 192, 34, 8) + tx(124, 122, '※「ホーム画面に追加」と表示される場合もあります', { s: 8, c: '#8a94ab' })),
+      and3: art('<rect width="320" height="150" fill="#cfd5e3"/><rect x="40" y="20" width="240" height="116" rx="16" fill="#fff"/><image href="' + ICON + '" x="58" y="36" width="40" height="40"/>' + tx(108, 54, 'アプリをインストール', { s: 13, w: 700 }) + tx(108, 72, '限定くん', { s: 11, c: '#777' }) + tx(180, 118, 'キャンセル', { s: 12, a: 'middle', c: '#777' }) + '<rect x="212" y="98" width="62" height="28" rx="14" fill="#0b3d91"/>' + tx(243, 117, 'インストール', { s: 11, a: 'middle', c: '#fff', w: 700 }) + hl(206, 92, 74, 40, 20)),
+      pc1: art('<rect width="320" height="150" fill="#eef1f8"/><rect x="0" y="0" width="320" height="44" fill="#dde3f0"/><rect x="40" y="8" width="210" height="28" rx="14" fill="#fff"/>' + tx(58, 27, 'fuupapayang.github.io', { s: 11, c: '#555' }) + '<g transform="translate(230,22)" fill="none" stroke="#0b3d91" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="-8" y="-7" width="16" height="11" rx="2"/><path d="M0-3v5M-3 0l3 3 3-3M-4 7h8"/></g>' + hl(210, 6, 40, 32, 16) + tx(160, 100, 'アドレスバーの右端のアイコン', { a: 'middle', w: 700, c: '#c00000', s: 13 }) + tx(160, 124, 'Chrome / Edge で表示されます', { a: 'middle', s: 10, c: '#8a94ab' })),
+      pc2: art('<rect width="320" height="150" fill="#cfd5e3"/><rect x="60" y="14" width="200" height="122" rx="12" fill="#fff"/><image href="' + ICON + '" x="76" y="28" width="38" height="38"/>' + tx(124, 46, '限定くんをインストール', { s: 12, w: 700 }) + tx(124, 62, 'fuupapayang.github.io', { s: 9, c: '#777' }) + tx(150, 118, 'キャンセル', { s: 11, a: 'middle', c: '#777' }) + '<rect x="188" y="98" width="62" height="28" rx="6" fill="#0b3d91"/>' + tx(219, 117, 'インストール', { s: 11, a: 'middle', c: '#fff', w: 700 }) + hl(182, 92, 74, 40, 10))
+    };
     var STEPS = {
       ios: [
-        ['画面下の共有ボタンをタップ', 'Safariの下にある ' + shareIco + ' 共有ボタン（四角から矢印が出ているマーク）をタップします。'],
-        ['「ホーム画面に追加」を選択', 'メニューを上にスクロールして、' + addIco + ' 「ホーム画面に追加」をタップします。'],
-        ['右上の「追加」をタップ', 'アイコンと名前を確認して、画面右上の「追加」を押します。'],
-        ['完成！アイコンから起動', 'ホーム画面に「限定くん」アイコンができました。そこから起動すると限定情報をご覧いただけます。']
+        ['画面の一番下の「共有」ボタンをタップ', '<b>Safari</b>で、画面下の真ん中にある ' + shareIco + '（四角から矢印が出ているマーク）を押します。', ART.ios1],
+        ['「ホーム画面に追加」をタップ', 'メニューを<b>上にスクロール</b>して、' + addIco + ' 「ホーム画面に追加」を探して押します。', ART.ios2],
+        ['右上の「追加」をタップ', '名前は「限定くん」のままで、画面の<b>右上の「追加」</b>を押します。', ART.ios3],
+        ['完成！ホーム画面のアイコンから開く', 'ホーム画面にできた「限定くん」のアイコンを押すと、限定情報をご覧いただけます。<b>次回からは、このページを開く必要はありません。</b>', ART.ios4]
       ],
       android: [
-        ['下のボタンをタップ', '「ワンタップでホーム画面に追加」を押します。出ない場合は、ブラウザ右上のメニュー（︙）を開きます。'],
-        ['「インストール」を選択', '確認画面が出たら「インストール」（または「ホーム画面に追加」）をタップします。'],
-        ['ホーム画面にアイコンが追加', '数秒でホーム画面にアイコンが追加されます。'],
-        ['完成！アイコンから起動', 'アイコンから起動すると、限定情報をご覧いただけます。']
+        ['右上の「︙」をタップ', '画面右上の<b>「︙」</b>を押します。（「ワンタップでホーム画面に追加」のボタンが出ている場合は、それを押すだけです）', ART.and1],
+        ['「アプリをインストール」をタップ', 'メニューの中の<b>「アプリをインストール」</b>（または「ホーム画面に追加」）を押します。', ART.and2],
+        ['「インストール」をタップ', '確認の画面で、<b>「インストール」</b>を押します。数秒で、ホーム画面にアイコンが追加されます。', ART.and3],
+        ['完成！ホーム画面のアイコンから開く', 'ホーム画面にできた「限定くん」のアイコンを押すと、限定情報をご覧いただけます。', ART.ios4]
       ],
       pc: [
-        ['アドレスバー右のアイコンをクリック', 'Chrome / Edge のアドレスバー右端にあるインストールアイコン（モニターに下矢印）をクリックします。'],
-        ['「インストール」をクリック', '表示されたポップアップで「インストール」を押します。'],
-        ['アプリが起動', '専用ウィンドウでアプリが開きます。デスクトップやDockにも追加されます。'],
-        ['完成！いつでも限定情報へ', '次回からはアイコンをクリックするだけで限定情報をご覧いただけます。']
+        ['アドレスバー右端のアイコンをクリック', 'Chrome / Edge の<b>アドレスバーの右端</b>にあるインストールのアイコン（モニターに下矢印）を押します。', ART.pc1],
+        ['「インストール」をクリック', '表示された小さな画面で<b>「インストール」</b>を押します。', ART.pc2],
+        ['アプリが起動します', '専用のウィンドウでアプリが開きます。デスクトップや Dock にもアイコンが追加されます。'],
+        ['完成！いつでも限定情報へ', '次回からは、アイコンを押すだけで限定情報をご覧いただけます。']
       ]
     };
     var LABEL = { ios: 'iPhone / iPad', android: 'Android', pc: 'パソコン' };
     function draw() {
       $('#envLabel').textContent = LABEL[platform] + (platform === 'ios' ? (isSafari ? '（Safari）' : '') : '');
       $$('#tabs button').forEach(function (b) { b.classList.toggle('on', b.dataset.env === env); });
-      $('#steps').innerHTML = STEPS[env].map(function (s, i) { return '<div class="step-card"><div class="step-no">0' + (i + 1) + '</div><div><h3>' + s[0] + '</h3><p>' + s[1] + '</p></div></div>'; }).join('');
+      var SUM = { ios: ['共有ボタン', 'ホーム画面に追加', '追加'], android: ['右上の︙', 'アプリをインストール', 'インストール'], pc: ['アドレスバーのアイコン', 'インストール', '完成'] }[env];
+      $('#sumLine').innerHTML = '<span class="sum-h">この3回タップするだけ</span>' + SUM.map(function (t, i) { return '<span class="sum-i"><b>' + (i + 1) + '</b>' + t + '</span>'; }).join('<span class="sum-a">›</span>');
+      $('#steps').innerHTML = STEPS[env].map(function (s, i) { return '<div class="step-card"><div class="step-no">0' + (i + 1) + '</div><div class="step-body"><h3>' + s[0] + '</h3><p>' + s[1] + '</p>' + (s[2] || '') + '</div></div>'; }).join('');
       var al = $('#envAlert'); al.classList.remove('on');
-      if (env === 'ios' && isIOS && !isSafari) { al.innerHTML = '<b>Safariで開いてください。</b>iPhoneではSafari以外のブラウザからホーム画面に追加できない場合があります。このページのURLをSafariで開き直してください。'; al.classList.add('on'); }
+      var inApp = /Line\/|FBAN|FBAV|Instagram|MicroMessenger|Twitter|KAKAOTALK|NAVER\(inapp|; wv\)/.test(ua);
+      if (inApp) { al.innerHTML = '<b>いま、アプリ内のブラウザで開いています。</b>この画面では、ホーム画面に追加できません。右上や右下の「…」から<b>「' + (isIOS ? 'Safariで開く' : '他のブラウザで開く') + '」</b>を選んで、開き直してください。<br><button type="button" class="btn btn-sm" id="copyUrl" style="margin-top:8px">このページのURLをコピー</button>'; al.classList.add('on'); var cu = $('#copyUrl'); if (cu) cu.addEventListener('click', function () { try { navigator.clipboard.writeText(location.href).then(function () { toast('URLをコピーしました'); }); } catch (e) { toast('コピーできませんでした'); } }); }
+      else if (env === 'ios' && isIOS && !isSafari) { al.innerHTML = '<b>Safariで開いてください。</b>iPhoneではSafari以外のブラウザからホーム画面に追加できない場合があります。このページのURLをSafariで開き直してください。'; al.classList.add('on'); }
       else if (env === 'ios' && !isIOS) { al.textContent = 'この手順はiPhone / iPad用です。お手持ちのiPhoneのSafariでこのページを開いてください。'; al.classList.add('on'); }
       $('#installBtn').hidden = !(deferred && env !== 'ios');
     }

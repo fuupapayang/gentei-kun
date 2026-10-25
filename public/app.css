@@ -245,3 +245,16 @@ footer.site-foot .prov,.foot-light .prov{font-size:11px;letter-spacing:.18em;mar
 /* hero video (PC only; SP keeps the still image to save data) */
 .hero-video{display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 60%}
 @media(min-width:761px) and (prefers-reduced-motion:no-preference){.hero-video{display:block}}
+
+/* install: clearer step guide */
+.sum-line{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:6px;background:#fff6f6;border:1px solid #f1c9c9;border-radius:12px;padding:12px 10px;margin:0 0 6px}
+.sum-line .sum-h{width:100%;text-align:center;font-size:12px;font-weight:800;color:var(--red);letter-spacing:.1em;margin-bottom:2px}
+.sum-line .sum-i{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--blue-d)}
+.sum-line .sum-i b{display:inline-flex;width:20px;height:20px;border-radius:50%;background:var(--red);color:#fff;font-size:11px;align-items:center;justify-content:center}
+.sum-line .sum-a{color:#b4bccd;font-size:16px}
+.step-body{flex:1;min-width:0}
+.step-body p b{color:var(--red)}
+.step-art{display:block;width:100%;max-width:340px;margin:12px 0 0;border-radius:14px;background:#f4f6fb;border:1px solid var(--line)}
+.step-art .hl{animation:hlPulse 1.4s ease-in-out infinite}
+@keyframes hlPulse{0%,100%{stroke-opacity:1}50%{stroke-opacity:.25}}
+@media (prefers-reduced-motion:reduce){.step-art .hl{animation:none}}
